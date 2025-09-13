@@ -2,6 +2,8 @@
 
 import pygame, sys, random, math, collections
 from powerups.speed import SpeedBoost
+from powerups.slow import EnemySlow
+
 
 # --- Setup ---
 pygame.init()
@@ -171,9 +173,15 @@ def spawn_speed_boost():
     # Return a new SpeedBoost object at that tile
     return SpeedBoost(c * TILE, r * TILE, TILE)
 
+def spawn_enemy_slow():
+    free_tiles = [(r, c) for r in range(len(maze)) for c in range(len(maze[0])) if maze[r][c] == 0]
+    r, c = random.choice(free_tiles)
+    return EnemySlow(c * TILE, r * TILE, TILE)
+
+
 # --- Reset & Game State ---
 def reset_maze():
-    global maze, player, enemies, goal_rect
+    global maze, player, enemies, goal_rect, powerups
     maze = make_maze(rows, cols)
     add_loops(maze, extra_paths=10)
 
@@ -205,10 +213,18 @@ def reset_maze():
     goal_rect.x = goal_col*TILE
     goal_rect.y = goal_row*TILE
     
+    # --- Power-Up Cleanup ---
+    for pu in powerups:
+        # Check if the power-up has a reset method
+        if hasattr(pu, 'reset'):
+            pu.reset()
+
     # --- Power-Ups ---
-    global powerups  # make sure this exists
-    powerups = []  # clear old power-ups
+    powerups.clear()  # clear old power-ups
+
+    # future fix: maybe we choose a certain power-up to appear at random
     powerups.append(spawn_speed_boost())  # spawn one new speed boost
+    powerups.append(spawn_enemy_slow())  # spawn slow-down power-up
 
 
 # --- Initialization ---
@@ -217,12 +233,12 @@ enemy_speed = 2
 player = Player(TILE, TILE)
 enemies = []
 goal_rect = pygame.Rect(0, 0, TILE, TILE)
-reset_maze()
 level = 1
 score = 0
 glow_timer = 0
 # --- Power-Up State ---
 powerups = []  # list to hold active power-ups
+reset_maze()
 
 
 # --- Main Loop ---
