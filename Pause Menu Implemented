@@ -53,27 +53,18 @@ player_pos = [1, 1]
 # Enemy
 enemy_pos = [MAZE_WIDTH - 2, MAZE_HEIGHT - 2]
 
-# Collectibles
-collectibles = []
-for _ in range(5):
-    while True:
-        pos = [random.randint(1, MAZE_WIDTH-2), random.randint(1, MAZE_HEIGHT-2)]
-        if maze[pos[1]][pos[0]] == 0 and pos != player_pos and pos != enemy_pos:
-            collectibles.append(pos)
-            break
+# Goal (only one per level)
+goal_pos = [random.randint(1, MAZE_WIDTH-2), random.randint(1, MAZE_HEIGHT-2)]
 
-# Powerup
-powerup_pos = [random.randint(1, MAZE_WIDTH-2), random.randint(1, MAZE_HEIGHT-2)]
-
-# Score
+# Score / Level
 score = 0
+level = 1
 
-# Glitch ability
-glitch_mode = False
-glitch_timer = 0
-glitch_duration = 120  # frames
-cooldown_timer = 0
-glitch_cooldown = 300  # frames
+# Movement speed control
+player_move_delay = 10   # frames between moves
+enemy_move_delay = 30    # frames between moves (will decrease each level)
+player_move_counter = 0
+enemy_move_counter = 0
 
 # ------------------------------
 # Helper functions
@@ -90,17 +81,11 @@ def draw_maze():
                 pygame.draw.rect(screen, NEON_PURPLE, (x*TILESIZE, y*TILESIZE, TILESIZE, TILESIZE), 2)
 
 def draw_game_elements():
-    global glitch_timer, cooldown_timer, glitch_mode, score
-
     # Maze
     draw_maze()
 
-    # Collectibles
-    for c in collectibles:
-        pygame.draw.circle(screen, NEON_PINK, (c[0]*TILESIZE+TILESIZE//2, c[1]*TILESIZE+TILESIZE//2), TILESIZE//4)
-
-    # Powerup
-    pygame.draw.rect(screen, NEON_GREEN, (powerup_pos[0]*TILESIZE+10, powerup_pos[1]*TILESIZE+10, TILESIZE-20, TILESIZE-20))
+    # Goal
+    pygame.draw.circle(screen, NEON_PINK, (goal_pos[0]*TILESIZE+TILESIZE//2, goal_pos[1]*TILESIZE+TILESIZE//2), TILESIZE//3)
 
     # Player
     pygame.draw.rect(screen, NEON_BLUE, (player_pos[0]*TILESIZE+5, player_pos[1]*TILESIZE+5, TILESIZE-10, TILESIZE-10))
@@ -110,12 +95,7 @@ def draw_game_elements():
 
     # UI
     draw_text(f"Score: {score}", font, WHITE, screen, 100, 30)
-
-    # Glitch timer
-    if glitch_mode:
-        draw_text(f"Glitch: {glitch_timer//FPS}", font, NEON_GREEN, screen, WIDTH - 150, 30)
-    elif cooldown_timer > 0:
-        draw_text(f"Cooldown: {cooldown_timer//FPS}", font, NEON_PINK, screen, WIDTH - 150, 30)
+    draw_text(f"Level: {level}", font, NEON_GREEN, screen, 250, 30)
 
 def move_enemy():
     if player_pos[0] > enemy_pos[0] and maze[enemy_pos[1]][enemy_pos[0]+1] == 0:
@@ -127,8 +107,17 @@ def move_enemy():
     elif player_pos[1] < enemy_pos[1] and maze[enemy_pos[1]-1][enemy_pos[0]] == 0:
         enemy_pos[1] -= 1
 
-def reset_maze():
+def reset_level():
+    global player_pos, enemy_pos, goal_pos, enemy_move_delay, level
     generate_maze()
+    player_pos = [1, 1]
+    enemy_pos = [MAZE_WIDTH - 2, MAZE_HEIGHT - 2]
+    while True:
+        goal_pos = [random.randint(1, MAZE_WIDTH-2), random.randint(1, MAZE_HEIGHT-2)]
+        if maze[goal_pos[1]][goal_pos[0]] == 0:
+            break
+    level += 1
+    enemy_move_delay = max(5, enemy_move_delay - 3)  # Enemy gets faster
 
 # ------------------------------
 # Pause and Settings Menus
@@ -142,7 +131,6 @@ def pause_menu():
     draw_text("Paused", title_font, NEON_BLUE, screen, WIDTH/2, HEIGHT/4)
 
     button_font = pygame.font.SysFont('Consolas', 40)
-
     mx, my = pygame.mouse.get_pos()
 
     button_resume = pygame.Rect(WIDTH/2-150, HEIGHT/2-100, 300, 50)
@@ -173,7 +161,6 @@ def settings_menu():
     draw_text("Settings", title_font, NEON_BLUE, screen, WIDTH/2, HEIGHT/4)
 
     button_font = pygame.font.SysFont('Consolas', 40)
-
     mx, my = pygame.mouse.get_pos()
 
     button_fullscreen = pygame.Rect(WIDTH/2-150, HEIGHT/2-50, 300, 50)
@@ -201,13 +188,8 @@ while running:
             running = False
 
         if game_state == "playing":
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_g and glitch_timer <= 0 and cooldown_timer <= 0:
-                    glitch_mode = True
-                    glitch_timer = glitch_duration
-                    cooldown_timer = glitch_cooldown
-                elif event.key == pygame.K_ESCAPE:
-                    game_state = "paused"
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                game_state = "paused"
 
         elif game_state == "paused":
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
@@ -230,7 +212,6 @@ while running:
                         screen = pygame.display.set_mode((0,0), pygame.FULLSCREEN)
                     else:
                         screen = pygame.display.set_mode((WIDTH, HEIGHT))
-                    reset_maze()
                 if button_back.collidepoint(pygame.mouse.get_pos()):
                     game_state = "paused"
 
@@ -239,41 +220,35 @@ while running:
     # ------------------------------
     if game_state == "playing":
         keys = pygame.key.get_pressed()
-        if keys[pygame.K_LEFT] and (maze[player_pos[1]][player_pos[0]-1] == 0 or glitch_mode):
-            player_pos[0] -= 1
-        if keys[pygame.K_RIGHT] and (maze[player_pos[1]][player_pos[0]+1] == 0 or glitch_mode):
-            player_pos[0] += 1
-        if keys[pygame.K_UP] and (maze[player_pos[1]-1][player_pos[0]] == 0 or glitch_mode):
-            player_pos[1] -= 1
-        if keys[pygame.K_DOWN] and (maze[player_pos[1]+1][player_pos[0]] == 0 or glitch_mode):
-            player_pos[1] += 1
 
-        # Collectibles
-        if player_pos in collectibles:
-            collectibles.remove(player_pos)
-            score += 10
+        # --- Player movement ---
+        player_move_counter += 1
+        if player_move_counter >= player_move_delay:
+            if keys[pygame.K_LEFT] and maze[player_pos[1]][player_pos[0]-1] == 0:
+                player_pos[0] -= 1
+            if keys[pygame.K_RIGHT] and maze[player_pos[1]][player_pos[0]+1] == 0:
+                player_pos[0] += 1
+            if keys[pygame.K_UP] and maze[player_pos[1]-1][player_pos[0]] == 0:
+                player_pos[1] -= 1
+            if keys[pygame.K_DOWN] and maze[player_pos[1]+1][player_pos[0]] == 0:
+                player_pos[1] += 1
+            player_move_counter = 0
 
-        # Powerup
-        if player_pos == powerup_pos:
-            glitch_mode = True
-            glitch_timer = glitch_duration
-            powerup_pos = [random.randint(1, MAZE_WIDTH-2), random.randint(1, MAZE_HEIGHT-2)]
+        # --- Enemy movement ---
+        enemy_move_counter += 1
+        if enemy_move_counter >= enemy_move_delay:
+            move_enemy()
+            enemy_move_counter = 0
 
-        # Enemy move
-        move_enemy()
+        # --- Goal ---
+        if player_pos == goal_pos:
+            score += 100
+            reset_level()
 
-        # Collision
-        if player_pos == enemy_pos and not glitch_mode:
+        # --- Collision ---
+        if player_pos == enemy_pos:
             print("Game Over! Final Score:", score)
             running = False
-
-        # Glitch timers
-        if glitch_mode:
-            glitch_timer -= 1
-            if glitch_timer <= 0:
-                glitch_mode = False
-        if cooldown_timer > 0:
-            cooldown_timer -= 1
 
         # Draw
         screen.fill(BLACK)
