@@ -1,0 +1,294 @@
+import pygame
+import random
+import sys
+
+# Initialize pygame
+pygame.init()
+
+# Screen dimensions
+WIDTH, HEIGHT = 1280, 720
+FPS = 60
+
+# Colors
+BLACK = (0, 0, 0)
+WHITE = (255, 255, 255)
+NEON_BLUE = (0, 255, 255)
+NEON_GREEN = (57, 255, 20)
+NEON_PINK = (255, 20, 147)
+NEON_PURPLE = (138, 43, 226)
+
+# Set up display
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("Cyberpunk Maze")
+clock = pygame.time.Clock()
+
+# Font
+font = pygame.font.SysFont('Consolas', 40)
+
+# Game states
+game_state = "playing"   # playing, paused, settings
+is_fullscreen = False
+
+# Maze dimensions
+TILESIZE = 40
+MAZE_WIDTH = WIDTH // TILESIZE
+MAZE_HEIGHT = HEIGHT // TILESIZE
+
+# Create maze grid
+maze = [[1 for _ in range(MAZE_WIDTH)] for _ in range(MAZE_HEIGHT)]
+
+def generate_maze():
+    for y in range(MAZE_HEIGHT):
+        for x in range(MAZE_WIDTH):
+            if x == 0 or y == 0 or x == MAZE_WIDTH-1 or y == MAZE_HEIGHT-1:
+                maze[y][x] = 1
+            else:
+                maze[y][x] = 0 if random.random() > 0.2 else 1
+
+generate_maze()
+
+# Player
+player_pos = [1, 1]
+
+# Enemy
+enemy_pos = [MAZE_WIDTH - 2, MAZE_HEIGHT - 2]
+
+# Collectibles
+collectibles = []
+for _ in range(5):
+    while True:
+        pos = [random.randint(1, MAZE_WIDTH-2), random.randint(1, MAZE_HEIGHT-2)]
+        if maze[pos[1]][pos[0]] == 0 and pos != player_pos and pos != enemy_pos:
+            collectibles.append(pos)
+            break
+
+# Powerup
+powerup_pos = [random.randint(1, MAZE_WIDTH-2), random.randint(1, MAZE_HEIGHT-2)]
+
+# Score
+score = 0
+
+# Glitch ability
+glitch_mode = False
+glitch_timer = 0
+glitch_duration = 120  # frames
+cooldown_timer = 0
+glitch_cooldown = 300  # frames
+
+# ------------------------------
+# Helper functions
+# ------------------------------
+def draw_text(text, font, color, surface, x, y):
+    textobj = font.render(text, True, color)
+    textrect = textobj.get_rect(center=(x, y))
+    surface.blit(textobj, textrect)
+
+def draw_maze():
+    for y in range(MAZE_HEIGHT):
+        for x in range(MAZE_WIDTH):
+            if maze[y][x] == 1:
+                pygame.draw.rect(screen, NEON_PURPLE, (x*TILESIZE, y*TILESIZE, TILESIZE, TILESIZE), 2)
+
+def draw_game_elements():
+    global glitch_timer, cooldown_timer, glitch_mode, score
+
+    # Maze
+    draw_maze()
+
+    # Collectibles
+    for c in collectibles:
+        pygame.draw.circle(screen, NEON_PINK, (c[0]*TILESIZE+TILESIZE//2, c[1]*TILESIZE+TILESIZE//2), TILESIZE//4)
+
+    # Powerup
+    pygame.draw.rect(screen, NEON_GREEN, (powerup_pos[0]*TILESIZE+10, powerup_pos[1]*TILESIZE+10, TILESIZE-20, TILESIZE-20))
+
+    # Player
+    pygame.draw.rect(screen, NEON_BLUE, (player_pos[0]*TILESIZE+5, player_pos[1]*TILESIZE+5, TILESIZE-10, TILESIZE-10))
+
+    # Enemy
+    pygame.draw.rect(screen, WHITE, (enemy_pos[0]*TILESIZE+5, enemy_pos[1]*TILESIZE+5, TILESIZE-10, TILESIZE-10))
+
+    # UI
+    draw_text(f"Score: {score}", font, WHITE, screen, 100, 30)
+
+    # Glitch timer
+    if glitch_mode:
+        draw_text(f"Glitch: {glitch_timer//FPS}", font, NEON_GREEN, screen, WIDTH - 150, 30)
+    elif cooldown_timer > 0:
+        draw_text(f"Cooldown: {cooldown_timer//FPS}", font, NEON_PINK, screen, WIDTH - 150, 30)
+
+def move_enemy():
+    if player_pos[0] > enemy_pos[0] and maze[enemy_pos[1]][enemy_pos[0]+1] == 0:
+        enemy_pos[0] += 1
+    elif player_pos[0] < enemy_pos[0] and maze[enemy_pos[1]][enemy_pos[0]-1] == 0:
+        enemy_pos[0] -= 1
+    elif player_pos[1] > enemy_pos[1] and maze[enemy_pos[1]+1][enemy_pos[0]] == 0:
+        enemy_pos[1] += 1
+    elif player_pos[1] < enemy_pos[1] and maze[enemy_pos[1]-1][enemy_pos[0]] == 0:
+        enemy_pos[1] -= 1
+
+def reset_maze():
+    generate_maze()
+
+# ------------------------------
+# Pause and Settings Menus
+# ------------------------------
+def pause_menu():
+    overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, 180))
+    screen.blit(overlay, (0, 0))
+
+    title_font = pygame.font.SysFont('Consolas', 60, bold=True)
+    draw_text("Paused", title_font, NEON_BLUE, screen, WIDTH/2, HEIGHT/4)
+
+    button_font = pygame.font.SysFont('Consolas', 40)
+
+    mx, my = pygame.mouse.get_pos()
+
+    button_resume = pygame.Rect(WIDTH/2-150, HEIGHT/2-100, 300, 50)
+    button_settings = pygame.Rect(WIDTH/2-150, HEIGHT/2, 300, 50)
+    button_quit = pygame.Rect(WIDTH/2-150, HEIGHT/2+100, 300, 50)
+
+    resume_color = NEON_GREEN if button_resume.collidepoint((mx,my)) else WHITE
+    settings_color = NEON_GREEN if button_settings.collidepoint((mx,my)) else WHITE
+    quit_color = NEON_PINK if button_quit.collidepoint((mx,my)) else WHITE
+
+    pygame.draw.rect(screen, resume_color, button_resume, 2, border_radius=5)
+    draw_text("Resume", button_font, resume_color, screen, button_resume.centerx, button_resume.centery)
+
+    pygame.draw.rect(screen, settings_color, button_settings, 2, border_radius=5)
+    draw_text("Settings", button_font, settings_color, screen, button_settings.centerx, button_settings.centery)
+
+    pygame.draw.rect(screen, quit_color, button_quit, 2, border_radius=5)
+    draw_text("Quit", button_font, quit_color, screen, button_quit.centerx, button_quit.centery)
+
+    return button_resume, button_settings, button_quit
+
+def settings_menu():
+    overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, 180))
+    screen.blit(overlay, (0, 0))
+
+    title_font = pygame.font.SysFont('Consolas', 60, bold=True)
+    draw_text("Settings", title_font, NEON_BLUE, screen, WIDTH/2, HEIGHT/4)
+
+    button_font = pygame.font.SysFont('Consolas', 40)
+
+    mx, my = pygame.mouse.get_pos()
+
+    button_fullscreen = pygame.Rect(WIDTH/2-150, HEIGHT/2-50, 300, 50)
+    button_back = pygame.Rect(WIDTH/2-150, HEIGHT/2+50, 300, 50)
+
+    fullscreen_color = NEON_GREEN if button_fullscreen.collidepoint((mx,my)) else WHITE
+    back_color = NEON_PINK if button_back.collidepoint((mx,my)) else WHITE
+
+    pygame.draw.rect(screen, fullscreen_color, button_fullscreen, 2, border_radius=5)
+    draw_text("Toggle Fullscreen", button_font, fullscreen_color, screen, button_fullscreen.centerx, button_fullscreen.centery)
+
+    pygame.draw.rect(screen, back_color, button_back, 2, border_radius=5)
+    draw_text("Back", button_font, back_color, screen, button_back.centerx, button_back.centery)
+
+    return button_fullscreen, button_back
+
+# ------------------------------
+# Main Game Loop
+# ------------------------------
+running = True
+while running:
+    events = pygame.event.get()
+    for event in events:
+        if event.type == pygame.QUIT:
+            running = False
+
+        if game_state == "playing":
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_g and glitch_timer <= 0 and cooldown_timer <= 0:
+                    glitch_mode = True
+                    glitch_timer = glitch_duration
+                    cooldown_timer = glitch_cooldown
+                elif event.key == pygame.K_ESCAPE:
+                    game_state = "paused"
+
+        elif game_state == "paused":
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                game_state = "playing"
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if button_resume.collidepoint(pygame.mouse.get_pos()):
+                    game_state = "playing"
+                if button_settings.collidepoint(pygame.mouse.get_pos()):
+                    game_state = "settings"
+                if button_quit.collidepoint(pygame.mouse.get_pos()):
+                    running = False
+
+        elif game_state == "settings":
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                game_state = "paused"
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if button_fullscreen.collidepoint(pygame.mouse.get_pos()):
+                    is_fullscreen = not is_fullscreen
+                    if is_fullscreen:
+                        screen = pygame.display.set_mode((0,0), pygame.FULLSCREEN)
+                    else:
+                        screen = pygame.display.set_mode((WIDTH, HEIGHT))
+                    reset_maze()
+                if button_back.collidepoint(pygame.mouse.get_pos()):
+                    game_state = "paused"
+
+    # ------------------------------
+    # Update & Draw
+    # ------------------------------
+    if game_state == "playing":
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_LEFT] and (maze[player_pos[1]][player_pos[0]-1] == 0 or glitch_mode):
+            player_pos[0] -= 1
+        if keys[pygame.K_RIGHT] and (maze[player_pos[1]][player_pos[0]+1] == 0 or glitch_mode):
+            player_pos[0] += 1
+        if keys[pygame.K_UP] and (maze[player_pos[1]-1][player_pos[0]] == 0 or glitch_mode):
+            player_pos[1] -= 1
+        if keys[pygame.K_DOWN] and (maze[player_pos[1]+1][player_pos[0]] == 0 or glitch_mode):
+            player_pos[1] += 1
+
+        # Collectibles
+        if player_pos in collectibles:
+            collectibles.remove(player_pos)
+            score += 10
+
+        # Powerup
+        if player_pos == powerup_pos:
+            glitch_mode = True
+            glitch_timer = glitch_duration
+            powerup_pos = [random.randint(1, MAZE_WIDTH-2), random.randint(1, MAZE_HEIGHT-2)]
+
+        # Enemy move
+        move_enemy()
+
+        # Collision
+        if player_pos == enemy_pos and not glitch_mode:
+            print("Game Over! Final Score:", score)
+            running = False
+
+        # Glitch timers
+        if glitch_mode:
+            glitch_timer -= 1
+            if glitch_timer <= 0:
+                glitch_mode = False
+        if cooldown_timer > 0:
+            cooldown_timer -= 1
+
+        # Draw
+        screen.fill(BLACK)
+        draw_game_elements()
+
+    elif game_state == "paused":
+        screen.fill(BLACK)
+        button_resume, button_settings, button_quit = pause_menu()
+
+    elif game_state == "settings":
+        screen.fill(BLACK)
+        button_fullscreen, button_back = settings_menu()
+
+    pygame.display.flip()
+    clock.tick(FPS)
+
+pygame.quit()
+sys.exit()
