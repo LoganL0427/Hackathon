@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 
 import pygame, sys, random, math, collections
+from powerups.speed import SpeedBoost
+from powerups.slow import EnemySlow
+
 
 # --- Setup ---
 pygame.init()
@@ -86,13 +89,33 @@ class Player:
         self.speed = 4
 
     def move(self, dx, dy):
-        new_x = self.rect.x + dx
-        new_y = self.rect.y + dy
-        # Fix bottom boundary to account for info bar
-        if 0 <= new_x <= WIDTH - TILE and 0 <= new_y <= HEIGHT - TILE - INFO_BAR_HEIGHT:
-            if not self.collide(dx, dy):
+        step_x = 1 if dx > 0 else -1
+        step_y = 1 if dy > 0 else -1
+
+        # move along x axis
+        for _ in range(abs(dx)):
+            new_x = self.rect.x + step_x
+            if 0 <= new_x <= WIDTH - TILE and not self.collide(step_x, 0):
                 self.rect.x = new_x
+            else:
+                break  # stop at wall
+
+        # move along y axis
+        for _ in range(abs(dy)):
+            new_y = self.rect.y + step_y
+            if 0 <= new_y <= HEIGHT - TILE - INFO_BAR_HEIGHT and not self.collide(0, step_y):
                 self.rect.y = new_y
+            else:
+                break
+
+    # def move(self, dx, dy):
+    #     new_x = self.rect.x + dx
+    #     new_y = self.rect.y + dy
+    #     # Fix bottom boundary to account for info bar
+    #     if 0 <= new_x <= WIDTH - TILE and 0 <= new_y <= HEIGHT - TILE - INFO_BAR_HEIGHT:
+    #         if not self.collide(dx, dy):
+    #             self.rect.x = new_x
+    #             self.rect.y = new_y
 
     def collide(self, dx, dy):
         new_rect = self.rect.move(dx, dy)
@@ -184,10 +207,28 @@ def get_reachable_tiles(maze, start):
                 visited.add((nr, nc))
                 queue.append((nr, nc))
     return visited
+# --- Add Power-ups Functions -----
+
+def spawn_speed_boost():
+    # Collect all empty tiles in the maze
+    free_tiles = [(r, c) for r in range(len(maze)) for c in range(len(maze[0])) if maze[r][c] == 0]
+    
+    # Pick a random free tile
+    r, c = random.choice(free_tiles)
+    
+    # Return a new SpeedBoost object at that tile
+    return SpeedBoost(c * TILE, r * TILE, TILE)
+
+def spawn_enemy_slow():
+    free_tiles = [(r, c) for r in range(len(maze)) for c in range(len(maze[0])) if maze[r][c] == 0]
+    r, c = random.choice(free_tiles)
+    return EnemySlow(c * TILE, r * TILE, TILE)
+
+
 
 # --- Reset & Game State ---
 def reset_maze(num_enemies=1):
-    global maze, player, enemies, goal_rect, goal_row, goal_col
+    global maze, player, enemies, goal_rect, goal_row, goal_col, powerups
     
     # Generate new maze
     maze = make_maze(rows, cols)
@@ -245,39 +286,21 @@ def reset_maze(num_enemies=1):
             er, ec = 3, 3
             if maze[er][ec] != 0:
                 maze[er][ec] = 0  # Force it to be walkable
-        enemies.append(Enemy(ec*TILE, er*TILE, enemy_speed))
+        enemies.append(Enemy(ec*TILE, er*TILE, enemy_speed))  
 
-import pygame
+    # --- Power-Up Cleanup ---
+    for pu in powerups:
+        # Check if the power-up has a reset method
+        if hasattr(pu, 'reset'):
+            pu.reset()
 
-class SpeedBoost:
-    def __init__(self, x, y, tile_size, duration=300):
-        self.rect = pygame.Rect(x, y, tile_size, tile_size)
-        self.duration = duration
-        self.active = False
-        self.timer = 0
-        self.color = (255, 255, 0)  # neon yellow
+    # --- Power-Ups ---
+    powerups.clear()  # clear old power-ups
 
-    def apply(self, player, enemies):
-        self.active = True
-        self.timer = self.duration
-        player.speed *= 2
-        # hide power-up
-        self.rect.x = -100
-        self.rect.y = -100
+    # future fix: maybe we choose a certain power-up to appear at random
+    powerups.append(spawn_speed_boost())  # spawn one new speed boost
+    powerups.append(spawn_enemy_slow())  # spawn slow-down power-up
 
-    def update(self, player, enemies):
-        if self.active:
-            self.timer -= 1
-            if self.timer <= 0:
-                self.remove(player, enemies)
-                self.active = False
-
-    def remove(self, player, enemies):
-        player.speed //= 2
-
-    def draw(self, screen):
-        if not self.active:
-            pygame.draw.rect(screen, self.color, self.rect)
 
 # --- Initialization ---
 rows, cols = (HEIGHT - INFO_BAR_HEIGHT)//TILE, WIDTH//TILE
@@ -289,6 +312,7 @@ goal_row, goal_col = 0, 0
 level = 1
 score = 0
 glow_timer = 0
+powerups = []
 reset_maze(1)
 
 # --- Main Loop ---
@@ -323,20 +347,35 @@ while running:
             
         for enemy in enemies:
             if player.rect.colliderect(enemy.rect):
+                enemies.clear()
                 level = 1
                 enemy_speed = 2
                 score = 0
                 reset_maze(1)
+                player = Player(TILE, TILE)
                 break
+
+        # --- Power-Up Collision & Update ---
+        for pu in powerups:
+            if player.rect.colliderect(pu.rect) and not pu.active:
+                pu.apply(player, enemies)
+            pu.update(player, enemies)
+
         screen.fill(BLACK)
         # Draw info bar at the top
         font = pygame.font.SysFont(None, 30)
         text = font.render(f"Level: {level} | Enemy Speed: {enemy_speed} | Score: {score}", True, NEON_BLUE)
         screen.blit(text, (10, 5))
+
         draw_maze()
         player.draw()
         for enemy in enemies:
             enemy.draw()
+        for pu in powerups:    
+            pu.draw(screen)
+
+
+
     elif state == "PAUSED":
         draw_pause()
     # Handle menu/escape logic using the same event list

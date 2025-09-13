@@ -1,2 +1,3 @@
-ILE*5, enemy_speed)
-        # enemies.append(enemy)
+
+from powerups.speed import SpeedBoost
+from powerups.slow import EnemySlow
