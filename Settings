@@ -46,6 +46,7 @@ NEON_PINK = (255, 20, 147)
 NEON_PURPLE = (138, 43, 226)
 
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
+game_surface = pygame.Surface((WIDTH, HEIGHT))
 pygame.display.set_caption("Cyberpunk Maze (Carved)")
 clock = pygame.time.Clock()
 font = pygame.font.SysFont('Consolas', 40)
@@ -212,12 +213,12 @@ def draw_maze():
             x = c * TILESIZE
             y = r * TILESIZE
             if maze[r][c] == 1:
-                pygame.draw.rect(screen, NEON_PURPLE, (x, y, TILESIZE, TILESIZE), 2)
+                pygame.draw.rect(game_surface, NEON_PURPLE, (x, y, TILESIZE, TILESIZE), 2)
             elif maze[r][c] == 9:
                 # glowing goal
                 glow = 3 + int(2 * abs(math.sin(pygame.time.get_ticks() * 0.005)))
-                pygame.draw.rect(screen, NEON_PINK, (x+2, y+2, TILESIZE-4, TILESIZE-4))
-                pygame.draw.rect(screen, NEON_PINK, (x+2, y+2, TILESIZE-4, TILESIZE-4), glow)
+                pygame.draw.rect(game_surface, NEON_PINK, (x+2, y+2, TILESIZE-4, TILESIZE-4))
+                pygame.draw.rect(game_surface, NEON_PINK, (x+2, y+2, TILESIZE-4, TILESIZE-4), glow)
 
 def draw_game_elements():
     # maze + special
@@ -226,16 +227,16 @@ def draw_game_elements():
     # player
     px = player_pos[0] * TILESIZE
     py = player_pos[1] * TILESIZE
-    pygame.draw.rect(screen, NEON_BLUE, (px+5, py+5, TILESIZE-10, TILESIZE-10))
+    pygame.draw.rect(game_surface, NEON_BLUE, (px+5, py+5, TILESIZE-10, TILESIZE-10))
 
     # enemy
     ex = enemy_pos[0] * TILESIZE
     ey = enemy_pos[1] * TILESIZE
-    pygame.draw.rect(screen, WHITE, (ex+5, ey+5, TILESIZE-10, TILESIZE-10))
+    pygame.draw.rect(game_surface, WHITE, (ex+5, ey+5, TILESIZE-10, TILESIZE-10))
 
     # top-left UI
     text = font.render(f"Level: {level}  Score: {score}", True, NEON_GREEN)
-    screen.blit(text, (16, 8))
+    game_surface.blit(text, (16, 8))
 
 # ------------------------------
 # Enemy movement (grid step)
@@ -272,18 +273,25 @@ def reset_level():
     # regenerate maze & positions
     generate_new_maze()
 
+def get_mouse_pos():
+    mx, my = pygame.mouse.get_pos()
+    if is_fullscreen:
+        mx -= (screen.get_width() - WIDTH) // 2
+        my -= (screen.get_height() - HEIGHT) // 2
+    return mx, my
+
 # ------------------------------
 # Menus (draw only) - rectangles computed on the fly for input checks
 # ------------------------------
 def draw_pause_menu():
     overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
     overlay.fill((0, 0, 0, 180))
-    screen.blit(overlay, (0, 0))
+    game_surface.blit(overlay, (0, 0))
     title_font = pygame.font.SysFont('Consolas', 60, bold=True)
-    draw_text("Paused", title_font, NEON_BLUE, screen, WIDTH//2, HEIGHT//4)
+    draw_text("Paused", title_font, NEON_BLUE, game_surface, WIDTH//2, HEIGHT//4)
 
     button_font = pygame.font.SysFont('Consolas', 40)
-    mx, my = pygame.mouse.get_pos()
+    mx, my = get_mouse_pos()
 
     btn_resume = pygame.Rect(WIDTH//2-150, HEIGHT//2-100, 300, 50)
     btn_settings = pygame.Rect(WIDTH//2-150, HEIGHT//2, 300, 50)
@@ -293,24 +301,24 @@ def draw_pause_menu():
     settings_color = NEON_GREEN if btn_settings.collidepoint((mx,my)) else WHITE
     quit_color = NEON_PINK if btn_quit.collidepoint((mx,my)) else WHITE
 
-    pygame.draw.rect(screen, resume_color, btn_resume, 2, border_radius=5)
-    draw_text("Resume", button_font, resume_color, screen, btn_resume.centerx, btn_resume.centery)
+    pygame.draw.rect(game_surface, resume_color, btn_resume, 2, border_radius=5)
+    draw_text("Resume", button_font, resume_color, game_surface, btn_resume.centerx, btn_resume.centery)
 
-    pygame.draw.rect(screen, settings_color, btn_settings, 2, border_radius=5)
-    draw_text("Settings", button_font, settings_color, screen, btn_settings.centerx, btn_settings.centery)
+    pygame.draw.rect(game_surface, settings_color, btn_settings, 2, border_radius=5)
+    draw_text("Settings", button_font, settings_color, game_surface, btn_settings.centerx, btn_settings.centery)
 
-    pygame.draw.rect(screen, quit_color, btn_quit, 2, border_radius=5)
-    draw_text("Quit", button_font, quit_color, screen, btn_quit.centerx, btn_quit.centery)
+    pygame.draw.rect(game_surface, quit_color, btn_quit, 2, border_radius=5)
+    draw_text("Quit", button_font, quit_color, game_surface, btn_quit.centerx, btn_quit.centery)
 
 def draw_settings_menu():
     overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
     overlay.fill((0, 0, 0, 180))
-    screen.blit(overlay, (0, 0))
+    game_surface.blit(overlay, (0, 0))
     title_font = pygame.font.SysFont('Consolas', 60, bold=True)
-    draw_text("Settings", title_font, NEON_BLUE, screen, WIDTH//2, HEIGHT//4)
+    draw_text("Settings", title_font, NEON_BLUE, game_surface, WIDTH//2, HEIGHT//4)
 
     button_font = pygame.font.SysFont('Consolas', 40)
-    mx, my = pygame.mouse.get_pos()
+    mx, my = get_mouse_pos()
 
     btn_fullscreen = pygame.Rect(WIDTH//2-150, HEIGHT//2-50, 300, 50)
     btn_back = pygame.Rect(WIDTH//2-150, HEIGHT//2+50, 300, 50)
@@ -318,11 +326,11 @@ def draw_settings_menu():
     fullscreen_color = NEON_GREEN if btn_fullscreen.collidepoint((mx,my)) else WHITE
     back_color = NEON_PINK if btn_back.collidepoint((mx,my)) else WHITE
 
-    pygame.draw.rect(screen, fullscreen_color, btn_fullscreen, 2, border_radius=5)
-    draw_text("Toggle Fullscreen", button_font, fullscreen_color, screen, btn_fullscreen.centerx, btn_fullscreen.centery)
+    pygame.draw.rect(game_surface, fullscreen_color, btn_fullscreen, 2, border_radius=5)
+    draw_text("Toggle Fullscreen", button_font, fullscreen_color, game_surface, btn_fullscreen.centerx, btn_fullscreen.centery)
 
-    pygame.draw.rect(screen, back_color, btn_back, 2, border_radius=5)
-    draw_text("Back", button_font, back_color, screen, btn_back.centerx, btn_back.centery)
+    pygame.draw.rect(game_surface, back_color, btn_back, 2, border_radius=5)
+    draw_text("Back", button_font, back_color, game_surface, btn_back.centerx, btn_back.centery)
 
 # ------------------------------
 # Main Loop
@@ -348,7 +356,7 @@ while running:
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 game_state = "playing"
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                mx, my = event.pos
+                mx, my = get_mouse_pos()
                 # compute rects (same as draw_pause_menu)
                 btn_resume = pygame.Rect(WIDTH//2-150, HEIGHT//2-100, 300, 50)
                 btn_settings = pygame.Rect(WIDTH//2-150, HEIGHT//2, 300, 50)
@@ -364,7 +372,7 @@ while running:
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 game_state = "paused"
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                mx, my = event.pos
+                mx, my = get_mouse_pos()
                 btn_fullscreen = pygame.Rect(WIDTH//2-150, HEIGHT//2-50, 300, 50)
                 btn_back = pygame.Rect(WIDTH//2-150, HEIGHT//2+50, 300, 50)
                 if btn_fullscreen.collidepoint((mx, my)):
@@ -429,20 +437,23 @@ while running:
             running = False
 
         # draw world
-        screen.fill(BLACK)
+        game_surface.fill(BLACK)
         draw_game_elements()
 
     elif game_state == "paused":
         # draw paused overlay/menu (buttons respond visually by hover)
-        screen.fill(BLACK)
+        game_surface.fill(BLACK)
         draw_game_elements()
         draw_pause_menu()
 
     elif game_state == "settings":
-        screen.fill(BLACK)
+        game_surface.fill(BLACK)
         draw_game_elements()
         draw_settings_menu()
 
+    # Center the game surface on the screen
+    screen.fill(BLACK)
+    screen.blit(game_surface, ((screen.get_width() - WIDTH) // 2, (screen.get_height() - HEIGHT) // 2))
     pygame.display.flip()
     clock.tick(FPS)
 
