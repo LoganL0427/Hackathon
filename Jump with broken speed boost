@@ -1,0 +1,452 @@
+import pygame, sys, random, math
+from collections import deque
+
+# --- Setup ---
+pygame.init()
+
+WIDTH, HEIGHT = 1280, 720
+TILE = 40
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("Neon Hacker")
+clock = pygame.time.Clock()
+
+# Colors (cyberpunk palette)
+BLACK = (10, 10, 10)
+NEON_BLUE = (0, 255, 255)
+NEON_PINK = (255, 0, 128)
+NEON_GREEN = (0, 255, 128)
+glitch_mode = False
+
+# --- Maze Layout ---
+# 1 = wall, 0 = empty space
+def make_maze(rows, cols):
+    maze = [[1 for _ in range(cols)] for _ in range(rows)]
+    
+    def carve(r, c):
+        directions = [(0,2),(0,-2),(2,0),(-2,0)]
+        random.shuffle(directions)
+        for dr, dc in directions:
+            nr, nc = r + dr, c + dc
+            if 0 < nr < rows and 0 < nc < cols and maze[nr][nc] == 1:
+                maze[nr-dr//2][nc-dc//2] = 0  # remove wall between
+                maze[nr][nc] = 0  # make new cell
+                carve(nr, nc)
+    
+    # Start at 1,1
+    maze[1][1] = 0
+    carve(1, 1)
+    
+    # Make goal
+    maze[rows-2][cols-2] = 9  # goal marker
+    return maze
+
+# Example
+rows, cols = (HEIGHT // TILE) + 2, (WIDTH // TILE) + 2  # odd numbers work best
+maze = make_maze(rows, cols)
+
+def add_loops(maze, extra_paths=8):
+    rows, cols = len(maze), len(maze[0])
+    for _ in range(extra_paths):
+        r = random.randrange(1, rows-1, 2)  # only cell rows
+        c = random.randrange(1, cols-1, 2)  # only cell cols
+        neighbors = []
+        if maze[r-1][c] == 1: neighbors.append((r-1,c))
+        if maze[r+1][c] == 1: neighbors.append((r+1,c))
+        if maze[r][c-1] == 1: neighbors.append((r,c-1))
+        if maze[r][c+1] == 1: neighbors.append((r,c+1))
+        if neighbors:
+            nr, nc = random.choice(neighbors)
+            maze[nr][nc] = 0  # remove wall to create a loop
+
+glitch_mode = False
+glitch_duration = 1.0    # seconds the glitch lasts
+glitch_timer = 0         # counts down when glitch is active
+glitch_cooldown = 5.0    # seconds before next glitch
+cooldown_timer = 0       # counts down while waiting
+
+# --- Entities ---
+class Player:
+    def __init__(self, x, y):
+        self.rect = pygame.Rect(x, y, TILE, TILE)
+        self.speed = 4
+        self.glitch_used = False  # Track if glitch was used
+
+    def move(self, dx, dy):
+        if not self.collide(dx, dy):
+            # Store the last valid position before moving
+            self.last_valid_position = (self.rect.x, self.rect.y)
+            self.rect.x += dx
+            self.rect.y += dy
+        elif glitch_mode and not self.glitch_used:
+            # Jump 2 spaces through the wall
+            self.rect.x += dx * 20
+            self.rect.y += dy * 20
+            self.glitch_used = True  # Mark glitch as used
+
+    def collide(self, dx, dy):
+        new_rect = self.rect.move(dx, dy)
+        for row in range(len(maze)):
+            for col in range(len(maze[row])):
+                if maze[row][col] == 1:  # Wall
+                    wall_rect = pygame.Rect(col * TILE, row * TILE, TILE, TILE)
+                    if new_rect.colliderect(wall_rect):
+                        return True
+        return False
+
+    def teleport(self, dx, dy):
+        """Teleport the player to the other side of the wall."""
+        # Current position
+        current_row, current_col = self.rect.y // TILE, self.rect.x // TILE
+
+        # Target position
+        target_row, target_col = (self.rect.y + dy) // TILE, (self.rect.x + dx) // TILE
+
+        # Move in the direction of dx, dy until an empty space is found
+        while 0 <= target_row < len(maze) and 0 <= target_col < len(maze[0]):
+            if maze[target_row][target_col] == 0:  # Found an empty space
+                self.rect.x = target_col * TILE
+                self.rect.y = target_row * TILE
+                return
+            # Keep moving in the direction of dx, dy
+            target_row += dy // TILE
+            target_col += dx // TILE
+
+        # If no empty space is found, revert to the last valid position
+        if hasattr(self, "last_valid_position"):
+            self.rect.x, self.rect.y = self.last_valid_position
+
+    def draw(self):
+        # <-- Color changes dynamically based on glitch mode
+        color = (255, 255, 0) if glitch_mode else NEON_BLUE
+        pygame.draw.rect(screen, color, self.rect)
+    
+    def move_to_nearest_empty_space(self):
+        """Move the player back to the most recent open position if inside a wall."""
+        row, col = self.rect.y // TILE, self.rect.x // TILE
+
+        # Check if the player is already in an empty space
+        if maze[row][col] == 0:
+            return  # No need to move
+
+        # If the player is in a wall, revert to the last valid position
+        if hasattr(self, "last_valid_position"):
+            self.rect.x, self.rect.y = self.last_valid_position
+        else:
+            # Fallback: Move to the starting position if no valid position is stored
+            self.rect.x, self.rect.y = TILE, TILE
+
+class Enemy:
+    def __init__(self, x, y, speed):
+        self.rect = pygame.Rect(x, y, TILE, TILE)
+        self.speed = speed
+        self.direction = random.choice([(1,0),(-1,0),(0,1),(0,-1)])
+    def update(self):
+        if not self.collide(self.direction[0]*self.speed, self.direction[1]*self.speed):
+            self.rect.x += self.direction[0]*self.speed
+            self.rect.y += self.direction[1]*self.speed
+        else:
+            self.direction = random.choice([(1,0),(-1,0),(0,1),(0,-1)])
+    def collide(self, dx, dy):
+        new_rect = self.rect.move(dx, dy)
+        for row in range(len(maze)):
+            for col in range(len(maze[row])):
+                if maze[row][col] == 1:
+                    wall_rect = pygame.Rect(col*TILE, row*TILE, TILE, TILE)
+                    if new_rect.colliderect(wall_rect):
+                        return True
+        return False
+    def draw(self):
+        pygame.draw.rect(screen, NEON_PINK, self.rect)
+
+class SpeedBoost:
+    def __init__(self, x, y, tile_size, duration=300):
+        self.rect = pygame.Rect(x, y, tile_size, tile_size)
+        self.duration = duration
+        self.active = False
+        self.timer = 0
+        self.color = (255, 255, 0)  # neon yellow
+
+    def apply(self, player):
+        self.active = True
+        self.timer = self.duration
+        player.speed *= 2
+        # Hide the power-up
+        self.rect.x = -100
+        self.rect.y = -100
+
+    def update(self, player):
+        if self.active:
+            self.timer -= 1
+            if self.timer <= 0:
+                self.remove(player)
+                self.active = False
+
+    def remove(self, player):
+        player.speed //= 2
+
+    def draw(self, screen):
+        if not self.active:
+            pygame.draw.rect(screen, self.color, self.rect)
+
+
+
+# --- Functions ---
+def draw_maze():
+    for row in range(len(maze)):
+        for col in range(len(maze[row])):
+            x = (col)*TILE  # shift one tile left
+            y = row*TILE
+            if maze[row][col] == 1:
+                pygame.draw.rect(screen, NEON_GREEN, (x, y, TILE, TILE), 2)
+            elif maze[row][col] == 9:
+                pygame.draw.rect(screen, (138, 43, 226), (x, y, TILE, TILE))
+                glow_size = int(3 + 2 * abs(math.sin(glow_timer)))
+                pygame.draw.rect(screen, (255, 0, 255), (x, y, TILE, TILE), glow_size)
+                print(f"Drawing goal at: ({row}, {col})")  # Debugging output
+
+# Draw glitch cooldown bar
+bar_width = 100
+bar_height = 10
+bar_x = 10
+bar_y = 40
+
+if cooldown_timer > 0:
+    fill_width = int(bar_width * (1 - cooldown_timer / glitch_cooldown))
+else:
+    fill_width = bar_width
+
+# Bar background
+pygame.draw.rect(screen, (50, 50, 50), (bar_x, bar_y, bar_width, bar_height))
+# Bar fill
+pygame.draw.rect(screen, (255, 255, 0), (bar_x, bar_y, fill_width, bar_height))
+
+# Indicate active glitch mode
+if glitch_mode:
+    pygame.draw.rect(screen, (0, 255, 0), (bar_x, bar_y, bar_width, bar_height), 2)
+
+def reset_maze():
+    global maze, player, enemies, goal_rect, speed_boost
+    # 1. Generate a new random maze
+    maze = make_maze(rows, cols)
+    add_loops(maze, extra_paths=10)  # optional: multiple paths
+
+    # Ensure outer border is walls
+    for r in range(rows):
+        maze[r][0] = 1
+        maze[r][cols-1] = 1
+    for c in range(cols):
+        maze[0][c] = 1
+        maze[rows-1][c] = 1
+
+    # 2. Reset player to start
+    player.rect.x = 1 * TILE
+    player.rect.y = 1 * TILE
+
+    # 3. Reset enemies
+    enemies.clear()
+    enemies.append(Enemy(5 * TILE, 5 * TILE, enemy_speed))  # spawn new enemy
+
+    # 4. Place goal randomly
+    place_random_goal()
+
+    # 5. Place speed boost
+    speed_boost = place_speed_boost()
+
+def find_farthest_free_tile(maze, player_pos):
+    rows, cols = len(maze), len(maze[0])
+    free_tiles = []
+
+    # Collect all free tiles
+    for r in range(rows):
+        for c in range(cols):
+            if maze[r][c] == 0:  # empty space
+                free_tiles.append((r, c))
+    
+    # Sort free tiles by distance from player, farthest first
+    free_tiles.sort(key=lambda tile: abs(tile[0]-TILE) + abs(tile[1]-TILE), reverse=True)
+    
+    # Return the first tile (farthest)
+    return free_tiles[0] if free_tiles else (1,1)
+
+def place_random_goal():
+    """Place the goal in a random empty space in the maze."""
+    empty_spaces = [(r, c) for r in range(len(maze)) for c in range(len(maze[r])) if maze[r][c] == 0]
+    if empty_spaces:
+        goal_row, goal_col = random.choice(empty_spaces)
+        maze[goal_row][goal_col] = 9  # Mark the goal in the maze
+        print(f"Goal placed at: ({goal_row}, {goal_col})")  # Debugging output
+    else:
+        print("Warning: No empty spaces available to place the goal!")
+        # Fallback: Place the goal at the starting position if no empty spaces are found
+        maze[1][1] = 9
+
+def place_speed_boost():
+    """Place the speed boost in a random empty space in the maze."""
+    empty_spaces = [(r, c) for r in range(len(maze)) for c in range(len(maze[r])) if maze[r][c] == 0]
+    if empty_spaces:
+        boost_row, boost_col = random.choice(empty_spaces)
+        return SpeedBoost(boost_col * TILE, boost_row * TILE, TILE)
+    return None
+
+# --- Game State ---
+enemy_speed = 2
+player = Player(TILE, TILE)
+enemies = []
+goal_rect = pygame.Rect(0, 0, TILE, TILE)
+speed_boost = place_speed_boost()  # Initialize the speed boost
+reset_maze()
+level = 1
+score = 0
+
+paused = False  # Track if the game is paused
+
+def quit_game():
+    pygame.quit()
+    sys.exit(0)
+
+def draw_pause_menu():
+    """Display the pause menu."""
+    menu_font = pygame.font.SysFont(None, 50)
+    pause_text = menu_font.render("Game Paused", True, NEON_PINK)
+    resume_text = menu_font.render("Press 'R' to Resume", True, NEON_BLUE)
+    exit_text = menu_font.render("Press 'Q' to Quit", True, NEON_GREEN)
+
+    # Center the text on the screen
+    screen.blit(pause_text, (WIDTH // 2 - pause_text.get_width() // 2, HEIGHT // 2 - 100))
+    screen.blit(resume_text, (WIDTH // 2 - resume_text.get_width() // 2, HEIGHT // 2))
+    screen.blit(exit_text, (WIDTH // 2 - exit_text.get_width() // 2, HEIGHT // 2 + 100))
+
+# --- Main Loop ---
+running = True
+glow_timer = 0
+
+while running:
+    # --- Event Handling ---
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+        elif event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:  # Pause the game
+                paused = True
+            elif event.key == pygame.K_q:  # Quit the game
+                if paused:  # Allow quitting only from the pause menu
+                    running = False
+            elif event.key == pygame.K_r:  # Resume the game
+                if paused:
+                    paused = False
+            elif event.key == pygame.K_g and not glitch_mode and cooldown_timer <= 0:
+                # Activate glitch mode
+                glitch_mode = True
+                player.glitch_used = False  # Reset glitch usage
+                cooldown_timer = glitch_cooldown  # Start cooldown immediately
+
+    # --- Pause Menu ---
+    if paused:
+        screen.fill(BLACK)  # Clear the screen
+        draw_pause_menu()  # Draw the pause menu
+        pygame.display.flip()  # Update the display
+        clock.tick(30)  # Limit the frame rate
+        continue  # Skip the rest of the game loop while paused
+
+    # --- Game Logic ---
+    keys = pygame.key.get_pressed()
+    if keys[pygame.K_LEFT]:
+        player.move(-player.speed, 0)
+    if keys[pygame.K_RIGHT]:
+        player.move(player.speed, 0)
+    if keys[pygame.K_UP]:
+        player.move(0, -player.speed)
+    if keys[pygame.K_DOWN]:
+        player.move(0, player.speed)
+
+    # Check if the player collects the speed boost
+    if speed_boost and player.rect.colliderect(speed_boost.rect):
+        speed_boost.apply(player)
+
+    # Update the speed boost
+    if speed_boost:
+        speed_boost.update(player)
+
+    # Turn off glitch mode after use
+    if glitch_mode and player.glitch_used:
+        glitch_mode = False  # Turn off glitch mode after jumping through a wall
+
+    for enemy in enemies:
+        enemy.update()
+
+    # Check for collision with the goal
+    if maze[player.rect.y // TILE][player.rect.x // TILE] == 9:
+        # Move to the next level
+        level += 1
+        enemy_speed += 1  # Increase enemy speed for difficulty
+        score += 1
+        glitch_timer = 0  # Reset glitch timer
+        cooldown_timer = 0  # Reset cooldown timer
+        reset_maze()
+
+    # --- Check Lose ---
+    for enemy in enemies:
+        if player.rect.colliderect(enemy.rect):
+            enemies.clear()
+            level = 1
+            enemy_speed = 2
+            reset_maze()
+            score = 0
+            player = Player(TILE, TILE)
+
+    # --- Draw ---
+    screen.fill(BLACK)
+    draw_maze()
+    player.draw()
+    for enemy in enemies:
+        enemy.draw()
+
+    # Draw the speed boost
+    if speed_boost:
+        speed_boost.draw(screen)
+
+    # Draw glitch cooldown bar
+    bar_width = 100
+    bar_height = 10
+    bar_x = 10
+    bar_y = 40
+
+    if cooldown_timer > 0:
+        fill_width = int(bar_width * (1 - cooldown_timer / glitch_cooldown))
+    else:
+        fill_width = bar_width
+
+    # Bar background
+    pygame.draw.rect(screen, (50, 50, 50), (bar_x, bar_y, bar_width, bar_height))
+    # Bar fill
+    pygame.draw.rect(screen, (255, 255, 0), (bar_x, bar_y, fill_width, bar_height))
+
+    # Indicate active glitch mode
+    if glitch_mode:
+        pygame.draw.rect(screen, (0, 255, 0), (bar_x, bar_y, bar_width, bar_height), 2)
+
+    # Display level
+    font = pygame.font.SysFont(None, 30)
+    text = font.render(f"Level: {level} | Enemy Speed: {enemy_speed} | Score: {score}", True, NEON_BLUE)
+    screen.blit(text, (10, 10))
+
+    pygame.display.flip()
+    clock.tick(30)
+    glow_timer += 0.1  # controls the pulsing speed
+
+    dt = 1 / 30
+
+    if cooldown_timer > 0:
+        cooldown_timer -= dt        
+        if cooldown_timer < 0:
+            cooldown_timer = 0
+
+        
+
+
+
+
+# Clean exit after loop end
+spygame.quit()
+sys.exit()
+pygame.quit()
