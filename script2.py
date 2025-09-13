@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import pygame, sys, random, math, collections
+from powerups.speed import SpeedBoost
 
 # --- Setup ---
 pygame.init()
@@ -56,13 +57,22 @@ class Player:
         self.speed = 4
 
     def move(self, dx, dy):
-        new_x = self.rect.x + dx
-        new_y = self.rect.y + dy
-        # Allow movement up to the last tile
-        if 0 <= new_x <= WIDTH - TILE and 0 <= new_y <= HEIGHT - TILE:
-            if not self.collide(dx, dy):
-                self.rect.x = new_x
-                self.rect.y = new_y
+        step_x = 1 if dx > 0 else -1
+        step_y = 1 if dy > 0 else -1
+
+        # move along x axis
+        for _ in range(abs(dx)):
+            if not self.collide(step_x, 0):
+                self.rect.x += step_x
+            else:
+                break  # stop at wall
+
+        # move along y axis
+        for _ in range(abs(dy)):
+            if not self.collide(0, step_y):
+                self.rect.y += step_y
+            else:
+                break
 
     def collide(self, dx, dy):
         new_rect = self.rect.move(dx, dy)
@@ -150,6 +160,17 @@ def get_reachable_tiles(maze, start):
                 queue.append((nr, nc))
     return visited
 
+
+def spawn_speed_boost():
+    # Collect all empty tiles in the maze
+    free_tiles = [(r, c) for r in range(len(maze)) for c in range(len(maze[0])) if maze[r][c] == 0]
+    
+    # Pick a random free tile
+    r, c = random.choice(free_tiles)
+    
+    # Return a new SpeedBoost object at that tile
+    return SpeedBoost(c * TILE, r * TILE, TILE)
+
 # --- Reset & Game State ---
 def reset_maze():
     global maze, player, enemies, goal_rect
@@ -183,6 +204,12 @@ def reset_maze():
     maze[goal_row][goal_col] = 9
     goal_rect.x = goal_col*TILE
     goal_rect.y = goal_row*TILE
+    
+    # --- Power-Ups ---
+    global powerups  # make sure this exists
+    powerups = []  # clear old power-ups
+    powerups.append(spawn_speed_boost())  # spawn one new speed boost
+
 
 # --- Initialization ---
 rows, cols = (HEIGHT//TILE)+2, (WIDTH//TILE)+2
@@ -194,6 +221,9 @@ reset_maze()
 level = 1
 score = 0
 glow_timer = 0
+# --- Power-Up State ---
+powerups = []  # list to hold active power-ups
+
 
 # --- Main Loop ---
 running = True
@@ -220,6 +250,9 @@ while running:
         enemy_speed += 1
         reset_maze()
         score += 1
+        # enemy = Enemy(TILE*5, TILE*5, enemy_speed)
+        # enemies.append(enemy)
+        player = Player(TILE, TILE)
 
     # check lose
     for enemy in enemies:
@@ -229,6 +262,13 @@ while running:
             enemy_speed = 2
             reset_maze()
             score = 0
+            player = Player(TILE, TILE)
+
+    # --- Power-Up Collision & Update ---
+    for pu in powerups:
+        if player.rect.colliderect(pu.rect) and not pu.active:
+            pu.apply(player, enemies)
+        pu.update(player, enemies)
 
     # --- Draw ---
     screen.fill(BLACK)
@@ -236,6 +276,8 @@ while running:
     player.draw()
     for enemy in enemies:
         enemy.draw()
+    for pu in powerups:    
+        pu.draw(screen)
 
     # Display info
     font = pygame.font.SysFont(None, 30)
