@@ -3,6 +3,33 @@ import random
 import sys
 import math
 
+
+def find_path_bfs(maze_data, start, end):
+    """
+    Finds if a path exists between start and end using Breadth-First Search.
+    start and end are (row, col) tuples.
+    Returns True if a path exists, False otherwise.
+    """
+    rows, cols = len(maze_data), len(maze_data[0])
+    queue = [start]
+    visited = {start}
+    
+    while queue:
+        r, c = queue.pop(0)
+
+        if (r, c) == end:
+            return True
+
+        for dr, dc in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
+            nr, nc = r + dr, c + dc
+            
+            if 0 <= nr < rows and 0 <= nc < cols and (nr, nc) not in visited:
+                # Can move to floor (0) or goal (9)
+                if maze_data[nr][nc] in (0, 9):
+                    visited.add((nr, nc))
+                    queue.append((nr, nc))
+    return False
+
 # ------------------------------
 # Init & Config
 # ------------------------------
