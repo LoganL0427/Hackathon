@@ -292,7 +292,7 @@ def reset_maze(num_enemies=1):
     for pu in powerups:
         # Check if the power-up has a reset method
         if hasattr(pu, 'reset'):
-            pu.reset()
+            pu.reset(player)
 
     # --- Power-Ups ---
     powerups.clear()  # clear old power-ups

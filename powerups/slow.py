@@ -37,7 +37,7 @@ class EnemySlow:
                 if i < len(self.original_speeds):
                     enemy.speed = self.original_speeds[i]
 
-    def reset(self):
+    def reset(self, player):
         self.active = False
         self.timer = 0
         self.original_speeds = []

@@ -26,6 +26,9 @@ class SpeedBoost:
     def remove(self, player, enemies):
         player.speed //= 2
 
+    def reset(self, player):
+        player.speed = 4
+
     def draw(self, screen):
         if not self.active:
             pygame.draw.rect(screen, self.color, self.rect)
