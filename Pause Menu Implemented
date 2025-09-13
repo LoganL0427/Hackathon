@@ -1,15 +1,16 @@
 import pygame
 import random
 import sys
+import math
 
-# Initialize pygame
+# ------------------------------
+# Init & Config
+# ------------------------------
 pygame.init()
-
-# Screen dimensions
 WIDTH, HEIGHT = 1280, 720
 FPS = 60
 
-# Colors
+# Colors (cyberpunk)
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 NEON_BLUE = (0, 255, 255)
@@ -17,87 +18,203 @@ NEON_GREEN = (57, 255, 20)
 NEON_PINK = (255, 20, 147)
 NEON_PURPLE = (138, 43, 226)
 
-# Set up display
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Cyberpunk Maze")
+pygame.display.set_caption("Cyberpunk Maze (Carved)")
 clock = pygame.time.Clock()
-
-# Font
 font = pygame.font.SysFont('Consolas', 40)
 
 # Game states
 game_state = "playing"   # playing, paused, settings
 is_fullscreen = False
 
-# Maze dimensions
+# Tile / Maze layout
 TILESIZE = 40
 MAZE_WIDTH = WIDTH // TILESIZE
 MAZE_HEIGHT = HEIGHT // TILESIZE
 
-# Create maze grid
-maze = [[1 for _ in range(MAZE_WIDTH)] for _ in range(MAZE_HEIGHT)]
+# We'll store maze as a 2D list:
+# 1 = wall, 0 = floor, 9 = goal
+maze = None
 
-def generate_maze():
-    for y in range(MAZE_HEIGHT):
-        for x in range(MAZE_WIDTH):
-            if x == 0 or y == 0 or x == MAZE_WIDTH-1 or y == MAZE_HEIGHT-1:
-                maze[y][x] = 1
-            else:
-                maze[y][x] = 0 if random.random() > 0.2 else 1
-
-generate_maze()
-
-# Player
-player_pos = [1, 1]
-
-# Enemy
-enemy_pos = [MAZE_WIDTH - 2, MAZE_HEIGHT - 2]
-
-# Goal (only one per level)
-goal_pos = [random.randint(1, MAZE_WIDTH-2), random.randint(1, MAZE_HEIGHT-2)]
-
-# Score / Level
-score = 0
-level = 1
-
-# Movement speed control
+# Movement delays (slower movement feel)
 player_move_delay = 10   # frames between moves
-enemy_move_delay = 30    # frames between moves (will decrease each level)
+enemy_move_delay = 30    # frames between enemy moves (decreases each level)
 player_move_counter = 0
 enemy_move_counter = 0
 
+# Player / Enemy / Goal (grid coords)
+player_pos = [1, 1]
+enemy_pos = [MAZE_WIDTH - 2, MAZE_HEIGHT - 2]
+goal_pos = [MAZE_WIDTH - 3, MAZE_HEIGHT - 3]
+
+# Score & Level
+score = 0
+level = 1
+
+# Optional: number of extra loops to add to maze (more loops = less linear)
+EXTRA_LOOPS = 8
+
 # ------------------------------
-# Helper functions
+# Maze Generator (carving DFS)
 # ------------------------------
-def draw_text(text, font, color, surface, x, y):
-    textobj = font.render(text, True, color)
+def make_carved_maze(rows, cols):
+    """Creates a carved maze using randomized DFS like your first game.
+       rows = number of tile rows, cols = number of tile cols.
+       Works with both even/odd sizes; carving progresses with step=2.
+    """
+    # Start filled with walls
+    m = [[1 for _ in range(cols)] for _ in range(rows)]
+
+    def carve(r, c):
+        directions = [(0, 2), (0, -2), (2, 0), (-2, 0)]
+        random.shuffle(directions)
+        for dr, dc in directions:
+            nr, nc = r + dr, c + dc
+            # ensure destination in bounds
+            if 0 < nr < rows and 0 < nc < cols and m[nr][nc] == 1:
+                # remove wall between current and next (half-step)
+                mid_r, mid_c = r + dr // 2, c + dc // 2
+                m[mid_r][mid_c] = 0
+                m[nr][nc] = 0
+                carve(nr, nc)
+
+    # ensure we have at least a start cell
+    start_r, start_c = 1, 1
+    if start_r >= rows: start_r = 1
+    if start_c >= cols: start_c = 1
+
+    m[start_r][start_c] = 0
+    carve(start_r, start_c)
+
+    return m
+
+def add_loops(m, extra_paths=8):
+    rows, cols = len(m), len(m[0])
+    for _ in range(extra_paths):
+        # choose a cell (odd indices typically)
+        r = random.randrange(1, rows-1)
+        c = random.randrange(1, cols-1)
+        # look for wall neighbors and knock one down
+        neighbors = []
+        if r-1 >= 0 and m[r-1][c] == 1: neighbors.append((r-1, c))
+        if r+1 < rows and m[r+1][c] == 1: neighbors.append((r+1, c))
+        if c-1 >= 0 and m[r][c-1] == 1: neighbors.append((r, c-1))
+        if c+1 < cols and m[r][c+1] == 1: neighbors.append((r, c+1))
+        if neighbors:
+            nr, nc = random.choice(neighbors)
+            m[nr][nc] = 0
+
+def place_goal_in_maze(m):
+    empty = [(r, c) for r in range(len(m)) for c in range(len(m[0])) if m[r][c] == 0]
+    if not empty:
+        return (1, 1)
+    return random.choice(empty)
+
+def generate_new_maze():
+    global maze, player_pos, enemy_pos, goal_pos
+    rows, cols = MAZE_HEIGHT, MAZE_WIDTH
+    maze = make_carved_maze(rows, cols)
+    # add a few loops to prevent perfect-maze monotony
+    add_loops(maze, EXTRA_LOOPS)
+
+    # ensure outer border walls
+    for r in range(rows):
+        maze[r][0] = 1
+        maze[r][cols-1] = 1
+    for c in range(cols):
+        maze[0][c] = 1
+        maze[rows-1][c] = 1
+
+    # place player, enemy, goal on empty tiles
+    # find start tile near (1,1)
+    player_pos = [1, 1]
+    if maze[player_pos[1]][player_pos[0]] == 1:
+        # find nearest floor tile
+        for r in range(rows):
+            for c in range(cols):
+                if maze[r][c] == 0:
+                    player_pos = [c, r]
+                    break
+            else:
+                continue
+            break
+
+    # enemy at far corner if possible
+    enemy_pos = [cols - 2, rows - 2]
+    if maze[enemy_pos[1]][enemy_pos[0]] == 1:
+        # find any empty tile far from player
+        empty = [(r, c) for r in range(rows) for c in range(cols) if maze[r][c] == 0]
+        empty.sort(key=lambda t: abs(t[0]-player_pos[1]) + abs(t[1]-player_pos[0]), reverse=True)
+        if empty:
+            er, ec = empty[0]
+            enemy_pos = [ec, er]
+
+    # place goal somewhere empty but not on player or enemy
+    gr, gc = place_goal_in_maze(maze)
+    # place_goal_in_maze returns (r,c) so convert
+    goal_pos = [gc, gr]
+    if (goal_pos == player_pos) or (goal_pos == enemy_pos):
+        # try again
+        empties = [(c, r) for r in range(rows) for c in range(cols) if maze[r][c] == 0 and [c,r] not in (player_pos, enemy_pos)]
+        if empties:
+            goal_pos = random.choice(empties)
+
+    # mark goal in the maze with 9 (for drawing convenience)
+    # clear any previous 9
+    for r in range(rows):
+        for c in range(cols):
+            if maze[r][c] == 9:
+                maze[r][c] = 0
+    maze[goal_pos[1]][goal_pos[0]] = 9
+
+# initial maze
+generate_new_maze()
+
+# ------------------------------
+# Drawing & helpers
+# ------------------------------
+def draw_text(text, font_obj, color, surface, x, y):
+    textobj = font_obj.render(text, True, color)
     textrect = textobj.get_rect(center=(x, y))
     surface.blit(textobj, textrect)
 
 def draw_maze():
-    for y in range(MAZE_HEIGHT):
-        for x in range(MAZE_WIDTH):
-            if maze[y][x] == 1:
-                pygame.draw.rect(screen, NEON_PURPLE, (x*TILESIZE, y*TILESIZE, TILESIZE, TILESIZE), 2)
+    rows, cols = len(maze), len(maze[0])
+    for r in range(rows):
+        for c in range(cols):
+            x = c * TILESIZE
+            y = r * TILESIZE
+            if maze[r][c] == 1:
+                pygame.draw.rect(screen, NEON_PURPLE, (x, y, TILESIZE, TILESIZE), 2)
+            elif maze[r][c] == 9:
+                # glowing goal
+                glow = 3 + int(2 * abs(math.sin(pygame.time.get_ticks() * 0.005)))
+                pygame.draw.rect(screen, NEON_PINK, (x+2, y+2, TILESIZE-4, TILESIZE-4))
+                pygame.draw.rect(screen, NEON_PINK, (x+2, y+2, TILESIZE-4, TILESIZE-4), glow)
 
 def draw_game_elements():
-    # Maze
+    # maze + special
     draw_maze()
 
-    # Goal
-    pygame.draw.circle(screen, NEON_PINK, (goal_pos[0]*TILESIZE+TILESIZE//2, goal_pos[1]*TILESIZE+TILESIZE//2), TILESIZE//3)
+    # player
+    px = player_pos[0] * TILESIZE
+    py = player_pos[1] * TILESIZE
+    pygame.draw.rect(screen, NEON_BLUE, (px+5, py+5, TILESIZE-10, TILESIZE-10))
 
-    # Player
-    pygame.draw.rect(screen, NEON_BLUE, (player_pos[0]*TILESIZE+5, player_pos[1]*TILESIZE+5, TILESIZE-10, TILESIZE-10))
+    # enemy
+    ex = enemy_pos[0] * TILESIZE
+    ey = enemy_pos[1] * TILESIZE
+    pygame.draw.rect(screen, WHITE, (ex+5, ey+5, TILESIZE-10, TILESIZE-10))
 
-    # Enemy
-    pygame.draw.rect(screen, WHITE, (enemy_pos[0]*TILESIZE+5, enemy_pos[1]*TILESIZE+5, TILESIZE-10, TILESIZE-10))
+    # top-left UI
+    text = font.render(f"Level: {level}  Score: {score}", True, NEON_GREEN)
+    screen.blit(text, (16, 8))
 
-    # UI
-    draw_text(f"Score: {score}", font, WHITE, screen, 100, 30)
-    draw_text(f"Level: {level}", font, NEON_GREEN, screen, 250, 30)
-
-def move_enemy():
+# ------------------------------
+# Enemy movement (grid step)
+# ------------------------------
+def move_enemy_towards_player():
+    # simple greedy step (checks walls)
     if player_pos[0] > enemy_pos[0] and maze[enemy_pos[1]][enemy_pos[0]+1] == 0:
         enemy_pos[0] += 1
     elif player_pos[0] < enemy_pos[0] and maze[enemy_pos[1]][enemy_pos[0]-1] == 0:
@@ -106,161 +223,198 @@ def move_enemy():
         enemy_pos[1] += 1
     elif player_pos[1] < enemy_pos[1] and maze[enemy_pos[1]-1][enemy_pos[0]] == 0:
         enemy_pos[1] -= 1
+    # if blocked, try a random valid neighbor to avoid getting stuck
+    else:
+        candidates = []
+        if maze[enemy_pos[1]][enemy_pos[0]+1] == 0: candidates.append((enemy_pos[0]+1, enemy_pos[1]))
+        if maze[enemy_pos[1]][enemy_pos[0]-1] == 0: candidates.append((enemy_pos[0]-1, enemy_pos[1]))
+        if maze[enemy_pos[1]+1][enemy_pos[0]] == 0: candidates.append((enemy_pos[0], enemy_pos[1]+1))
+        if maze[enemy_pos[1]-1][enemy_pos[0]] == 0: candidates.append((enemy_pos[0], enemy_pos[1]-1))
+        if candidates:
+            nx, ny = random.choice(candidates)
+            enemy_pos[0], enemy_pos[1] = nx, ny
 
+# ------------------------------
+# Level reset
+# ------------------------------
 def reset_level():
-    global player_pos, enemy_pos, goal_pos, enemy_move_delay, level
-    generate_maze()
-    player_pos = [1, 1]
-    enemy_pos = [MAZE_WIDTH - 2, MAZE_HEIGHT - 2]
-    while True:
-        goal_pos = [random.randint(1, MAZE_WIDTH-2), random.randint(1, MAZE_HEIGHT-2)]
-        if maze[goal_pos[1]][goal_pos[0]] == 0:
-            break
+    global level, enemy_move_delay, score
     level += 1
-    enemy_move_delay = max(5, enemy_move_delay - 3)  # Enemy gets faster
+    # speed up enemy by decreasing delay, clamp to minimum
+    enemy_move_delay = max(5, enemy_move_delay - 3)
+    # regenerate maze & positions
+    generate_new_maze()
 
 # ------------------------------
-# Pause and Settings Menus
+# Menus (draw only) - rectangles computed on the fly for input checks
 # ------------------------------
-def pause_menu():
+def draw_pause_menu():
     overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
     overlay.fill((0, 0, 0, 180))
     screen.blit(overlay, (0, 0))
-
     title_font = pygame.font.SysFont('Consolas', 60, bold=True)
-    draw_text("Paused", title_font, NEON_BLUE, screen, WIDTH/2, HEIGHT/4)
+    draw_text("Paused", title_font, NEON_BLUE, screen, WIDTH//2, HEIGHT//4)
 
     button_font = pygame.font.SysFont('Consolas', 40)
     mx, my = pygame.mouse.get_pos()
 
-    button_resume = pygame.Rect(WIDTH/2-150, HEIGHT/2-100, 300, 50)
-    button_settings = pygame.Rect(WIDTH/2-150, HEIGHT/2, 300, 50)
-    button_quit = pygame.Rect(WIDTH/2-150, HEIGHT/2+100, 300, 50)
+    btn_resume = pygame.Rect(WIDTH//2-150, HEIGHT//2-100, 300, 50)
+    btn_settings = pygame.Rect(WIDTH//2-150, HEIGHT//2, 300, 50)
+    btn_quit = pygame.Rect(WIDTH//2-150, HEIGHT//2+100, 300, 50)
 
-    resume_color = NEON_GREEN if button_resume.collidepoint((mx,my)) else WHITE
-    settings_color = NEON_GREEN if button_settings.collidepoint((mx,my)) else WHITE
-    quit_color = NEON_PINK if button_quit.collidepoint((mx,my)) else WHITE
+    resume_color = NEON_GREEN if btn_resume.collidepoint((mx,my)) else WHITE
+    settings_color = NEON_GREEN if btn_settings.collidepoint((mx,my)) else WHITE
+    quit_color = NEON_PINK if btn_quit.collidepoint((mx,my)) else WHITE
 
-    pygame.draw.rect(screen, resume_color, button_resume, 2, border_radius=5)
-    draw_text("Resume", button_font, resume_color, screen, button_resume.centerx, button_resume.centery)
+    pygame.draw.rect(screen, resume_color, btn_resume, 2, border_radius=5)
+    draw_text("Resume", button_font, resume_color, screen, btn_resume.centerx, btn_resume.centery)
 
-    pygame.draw.rect(screen, settings_color, button_settings, 2, border_radius=5)
-    draw_text("Settings", button_font, settings_color, screen, button_settings.centerx, button_settings.centery)
+    pygame.draw.rect(screen, settings_color, btn_settings, 2, border_radius=5)
+    draw_text("Settings", button_font, settings_color, screen, btn_settings.centerx, btn_settings.centery)
 
-    pygame.draw.rect(screen, quit_color, button_quit, 2, border_radius=5)
-    draw_text("Quit", button_font, quit_color, screen, button_quit.centerx, button_quit.centery)
+    pygame.draw.rect(screen, quit_color, btn_quit, 2, border_radius=5)
+    draw_text("Quit", button_font, quit_color, screen, btn_quit.centerx, btn_quit.centery)
 
-    return button_resume, button_settings, button_quit
-
-def settings_menu():
+def draw_settings_menu():
     overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
     overlay.fill((0, 0, 0, 180))
     screen.blit(overlay, (0, 0))
-
     title_font = pygame.font.SysFont('Consolas', 60, bold=True)
-    draw_text("Settings", title_font, NEON_BLUE, screen, WIDTH/2, HEIGHT/4)
+    draw_text("Settings", title_font, NEON_BLUE, screen, WIDTH//2, HEIGHT//4)
 
     button_font = pygame.font.SysFont('Consolas', 40)
     mx, my = pygame.mouse.get_pos()
 
-    button_fullscreen = pygame.Rect(WIDTH/2-150, HEIGHT/2-50, 300, 50)
-    button_back = pygame.Rect(WIDTH/2-150, HEIGHT/2+50, 300, 50)
+    btn_fullscreen = pygame.Rect(WIDTH//2-150, HEIGHT//2-50, 300, 50)
+    btn_back = pygame.Rect(WIDTH//2-150, HEIGHT//2+50, 300, 50)
 
-    fullscreen_color = NEON_GREEN if button_fullscreen.collidepoint((mx,my)) else WHITE
-    back_color = NEON_PINK if button_back.collidepoint((mx,my)) else WHITE
+    fullscreen_color = NEON_GREEN if btn_fullscreen.collidepoint((mx,my)) else WHITE
+    back_color = NEON_PINK if btn_back.collidepoint((mx,my)) else WHITE
 
-    pygame.draw.rect(screen, fullscreen_color, button_fullscreen, 2, border_radius=5)
-    draw_text("Toggle Fullscreen", button_font, fullscreen_color, screen, button_fullscreen.centerx, button_fullscreen.centery)
+    pygame.draw.rect(screen, fullscreen_color, btn_fullscreen, 2, border_radius=5)
+    draw_text("Toggle Fullscreen", button_font, fullscreen_color, screen, btn_fullscreen.centerx, btn_fullscreen.centery)
 
-    pygame.draw.rect(screen, back_color, button_back, 2, border_radius=5)
-    draw_text("Back", button_font, back_color, screen, button_back.centerx, button_back.centery)
-
-    return button_fullscreen, button_back
+    pygame.draw.rect(screen, back_color, btn_back, 2, border_radius=5)
+    draw_text("Back", button_font, back_color, screen, btn_back.centerx, btn_back.centery)
 
 # ------------------------------
-# Main Game Loop
+# Main Loop
 # ------------------------------
 running = True
+# initialize enemy_move_delay variable in this scope
+enemy_move_delay = 30
+
 while running:
     events = pygame.event.get()
+
     for event in events:
         if event.type == pygame.QUIT:
             running = False
 
+        # Key events applicable in multiple states
         if game_state == "playing":
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                game_state = "paused"
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    game_state = "paused"
 
         elif game_state == "paused":
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 game_state = "playing"
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                if button_resume.collidepoint(pygame.mouse.get_pos()):
+                mx, my = event.pos
+                # compute rects (same as draw_pause_menu)
+                btn_resume = pygame.Rect(WIDTH//2-150, HEIGHT//2-100, 300, 50)
+                btn_settings = pygame.Rect(WIDTH//2-150, HEIGHT//2, 300, 50)
+                btn_quit = pygame.Rect(WIDTH//2-150, HEIGHT//2+100, 300, 50)
+                if btn_resume.collidepoint((mx, my)):
                     game_state = "playing"
-                if button_settings.collidepoint(pygame.mouse.get_pos()):
+                elif btn_settings.collidepoint((mx, my)):
                     game_state = "settings"
-                if button_quit.collidepoint(pygame.mouse.get_pos()):
+                elif btn_quit.collidepoint((mx, my)):
                     running = False
 
         elif game_state == "settings":
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 game_state = "paused"
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                if button_fullscreen.collidepoint(pygame.mouse.get_pos()):
+                mx, my = event.pos
+                btn_fullscreen = pygame.Rect(WIDTH//2-150, HEIGHT//2-50, 300, 50)
+                btn_back = pygame.Rect(WIDTH//2-150, HEIGHT//2+50, 300, 50)
+                if btn_fullscreen.collidepoint((mx, my)):
                     is_fullscreen = not is_fullscreen
                     if is_fullscreen:
                         screen = pygame.display.set_mode((0,0), pygame.FULLSCREEN)
                     else:
                         screen = pygame.display.set_mode((WIDTH, HEIGHT))
-                if button_back.collidepoint(pygame.mouse.get_pos()):
+                elif btn_back.collidepoint((mx, my)):
                     game_state = "paused"
 
     # ------------------------------
-    # Update & Draw
+    # Game updates (playing)
     # ------------------------------
     if game_state == "playing":
         keys = pygame.key.get_pressed()
-
-        # --- Player movement ---
+        # player movement with delay (grid steps)
         player_move_counter += 1
         if player_move_counter >= player_move_delay:
-            if keys[pygame.K_LEFT] and maze[player_pos[1]][player_pos[0]-1] == 0:
-                player_pos[0] -= 1
-            if keys[pygame.K_RIGHT] and maze[player_pos[1]][player_pos[0]+1] == 0:
-                player_pos[0] += 1
-            if keys[pygame.K_UP] and maze[player_pos[1]-1][player_pos[0]] == 0:
-                player_pos[1] -= 1
-            if keys[pygame.K_DOWN] and maze[player_pos[1]+1][player_pos[0]] == 0:
-                player_pos[1] += 1
+            moved = False
+            # check bounds & walls before moving
+            if keys[pygame.K_LEFT]:
+                nx = player_pos[0] - 1
+                ny = player_pos[1]
+                if 0 <= nx < MAZE_WIDTH and maze[ny][nx] in (0,9):
+                    player_pos[0] = nx; moved = True
+            if keys[pygame.K_RIGHT]:
+                nx = player_pos[0] + 1
+                ny = player_pos[1]
+                if 0 <= nx < MAZE_WIDTH and maze[ny][nx] in (0,9):
+                    player_pos[0] = nx; moved = True
+            if keys[pygame.K_UP]:
+                nx = player_pos[0]
+                ny = player_pos[1] - 1
+                if 0 <= ny < MAZE_HEIGHT and maze[ny][nx] in (0,9):
+                    player_pos[1] = ny; moved = True
+            if keys[pygame.K_DOWN]:
+                nx = player_pos[0]
+                ny = player_pos[1] + 1
+                if 0 <= ny < MAZE_HEIGHT and maze[ny][nx] in (0,9):
+                    player_pos[1] = ny; moved = True
+            if moved:
+                # small audio or effect could go here
+                pass
             player_move_counter = 0
 
-        # --- Enemy movement ---
+        # enemy movement with delay
         enemy_move_counter += 1
         if enemy_move_counter >= enemy_move_delay:
-            move_enemy()
+            move_enemy_towards_player()
             enemy_move_counter = 0
 
-        # --- Goal ---
+        # check goal collision
         if player_pos == goal_pos:
             score += 100
             reset_level()
 
-        # --- Collision ---
+        # check enemy collision
         if player_pos == enemy_pos:
+            # simple game over handling: print & exit
             print("Game Over! Final Score:", score)
             running = False
 
-        # Draw
+        # draw world
         screen.fill(BLACK)
         draw_game_elements()
 
     elif game_state == "paused":
+        # draw paused overlay/menu (buttons respond visually by hover)
         screen.fill(BLACK)
-        button_resume, button_settings, button_quit = pause_menu()
+        draw_game_elements()
+        draw_pause_menu()
 
     elif game_state == "settings":
         screen.fill(BLACK)
-        button_fullscreen, button_back = settings_menu()
+        draw_game_elements()
+        draw_settings_menu()
 
     pygame.display.flip()
     clock.tick(FPS)
