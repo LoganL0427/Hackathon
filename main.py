@@ -7,6 +7,7 @@ from powerups.slow import EnemySlow
 
 # --- Setup ---
 pygame.init()
+pygame.mixer.init()  # Make sure mixer is initialized
 WIDTH, HEIGHT = 800, 600
 TILE = 60
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
@@ -14,6 +15,13 @@ pygame.display.set_caption("Neon Hacker")
 clock = pygame.time.Clock()
 state = "MENU"
 INFO_BAR_HEIGHT = 40
+
+# --- Load background music ---
+try:
+    pygame.mixer.music.load("images/background.mp3")  # adjust path as needed
+    pygame.mixer.music.set_volume(0.3)  # optional: lower volume so it's not too loud
+except pygame.error as e:
+    print(f"Could not load music: {e}")
 
 
 # --- Load Images ---
@@ -546,6 +554,10 @@ glow_timer = 0
 powerups = []
 reset_maze(1)
 
+# Start playing music (loop indefinitely)
+if not pygame.mixer.music.get_busy():  # avoids restarting if already playing
+    pygame.mixer.music.play(-1)
+
 # --- Main Loop ---
 running = True
 while running:
@@ -563,6 +575,7 @@ while running:
     for event in events:
         if event.type == pygame.QUIT:
             running = False
+            pygame.mixer.music.stop()
             pygame.quit()
             sys.exit()
         elif state == 'PLAYING' and event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
