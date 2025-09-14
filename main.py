@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 
 import pygame, sys, random, math, collections, time
 from powerups.speed import SpeedBoost
@@ -6,11 +7,22 @@ from powerups.slow import EnemySlow
 
 # --- Setup ---
 pygame.init()
-pygame.mixer.init()  
+pygame.mixer.init()  # Make sure mixer is initialized
 WIDTH, HEIGHT = 800, 600
 TILE = 60
+
+# --- Fullscreen Setup ---
+# Get the dimensions of the user's monitor
+info = pygame.display.Info()
+DESKTOP_WIDTH, DESKTOP_HEIGHT = info.current_w, info.current_h
+is_fullscreen = False
+
+# The 'screen' is the actual window, which can change size
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Neon Hacker")
+# The 'game_surface' is a fixed-size canvas where all game elements are drawn
+game_surface = pygame.Surface((WIDTH, HEIGHT))
+
+pygame.display.set_caption("Glitch Scape")
 clock = pygame.time.Clock()
 state = "MENU"
 INFO_BAR_HEIGHT = 40
@@ -42,7 +54,7 @@ except pygame.error as e:
     player_image = None
 
 # --- Load Fonts ---
-TITLE_FONT = pygame.font.Font("media/PressStart2P-Regular.ttf", 60)
+TITLE_FONT = pygame.font.Font("media/PressStart2P-Regular.ttf", 59)
 SUBTITLE_FONT = pygame.font.Font("media/PressStart2P-Regular.ttf", 21)
 HELP_FONT = pygame.font.Font("media/PressStart2P-Regular.ttf", 18)
 MENU_FONT = pygame.font.Font("media/PressStart2P-Regular.ttf", 39)
@@ -56,27 +68,26 @@ NEON_GREEN = (19, 235, 221)
 NEON_YELLOW = (255, 255, 0)
 WHITE = (255, 255, 255)
 
-# --- Draw Menus
 def draw_scrolling_grid(offset):
     """Draw a scrolling neon grid background."""
     grid_color = (0, 255, 200)  # teal-ish neon
     spacing = 40  # grid spacing
     # Dark background
-    screen.fill(BLACK)
+    game_surface.fill(BLACK)
 
     # Vertical lines
     for x in range(0, WIDTH, spacing):
-        pygame.draw.line(screen, grid_color, (x, 0), (x, HEIGHT), 1)
+        pygame.draw.line(game_surface, grid_color, (x, 0), (x, HEIGHT), 1)
 
     # Horizontal lines (scrolling)
     for y in range(-spacing, HEIGHT, spacing):
-        pygame.draw.line(screen, grid_color, (0, y + offset), (WIDTH, y + offset), 1)
+        pygame.draw.line(game_surface, grid_color, (0, y + offset), (WIDTH, y + offset), 1)
 
     # Overlay to dim so text pops
     overlay = pygame.Surface((WIDTH, HEIGHT))
     overlay.set_alpha(150)  # adjust transparency: 0 clear → 255 opaque
     overlay.fill(BLACK)
-    screen.blit(overlay, (0, 0))
+    game_surface.blit(overlay, (0, 0))
 
 def draw_blur_glow_text(text, font, color, glow_color, pos):
     """Draws text with a soft blurred neon glow."""
@@ -92,14 +103,13 @@ def draw_blur_glow_text(text, font, color, glow_color, pos):
         for dx in (-radius, 0, radius):
             for dy in (-radius, 0, radius):
                 if dx != 0 or dy != 0:
-                    screen.blit(glow_surf, (x + dx, y + dy))
+                    game_surface.blit(glow_surf, (x + dx, y + dy))
     
     # Draw main text on top
-    screen.blit(font.render(text, True, color), pos)
+    game_surface.blit(font.render(text, True, color), pos)
 
 
 def draw_menu():
-    """Display Title Screen"""
     font = TITLE_FONT
     subtitle_font = SUBTITLE_FONT
     help_font = HELP_FONT
@@ -110,6 +120,7 @@ def draw_menu():
 
     waiting = True
     while waiting:
+        global screen, is_fullscreen # Allow modifying these global variables
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
@@ -119,26 +130,39 @@ def draw_menu():
                     waiting = False
                 elif event.key == pygame.K_h:
                     draw_instructions()  # show how to play
+                elif event.key == pygame.K_f:
+                    is_fullscreen = not is_fullscreen
+                    if is_fullscreen:
+                        screen = pygame.display.set_mode((DESKTOP_WIDTH, DESKTOP_HEIGHT), pygame.FULLSCREEN)
+                    else:
+                        screen = pygame.display.set_mode((WIDTH, HEIGHT))
+
 
         # Animate scrolling background
         offset = (offset + 0.35) % 40
         draw_scrolling_grid(offset)
 
         # Draw blurred glowing title
-        draw_blur_glow_text("NEON HACKER", font, NEON_BLUE, NEON_BLUE,
-                            ((WIDTH - font.size("NEON HACKER")[0]) // 2, HEIGHT // 3))
+        draw_blur_glow_text("GLITCH SCAPE", font, NEON_BLUE, NEON_BLUE,
+                            ((WIDTH - font.size("GLITCH SCAPE")[0]) // 2, HEIGHT // 3))
 
         # Draw subtitles
-        screen.blit(subtitle, ((WIDTH - subtitle.get_width()) // 2, HEIGHT // 2))
-        screen.blit(help_text, ((WIDTH - help_text.get_width()) // 2, HEIGHT // 2 + 50))
+        game_surface.blit(subtitle, ((WIDTH - subtitle.get_width()) // 2, HEIGHT // 2))
+        game_surface.blit(help_text, ((WIDTH - help_text.get_width()) // 2, HEIGHT // 2 + 50))
 
+        # --- Final Blit to the Display ---
+        screen.fill(BLACK)
+        game_rect = game_surface.get_rect(center=screen.get_rect().center)
+        screen.blit(game_surface, game_rect)
         pygame.display.flip()
+        
         clock.tick(60)
 
 
+
+
 def draw_instructions():
-    """Display How to Play Menu"""
-    screen.fill(BLACK)
+    global screen, is_fullscreen # Allow modifying these global variables
     font_title = MENU_FONT
     font_text = HELP_FONT
     font_controls = SUBTITLE_FONT
@@ -173,6 +197,12 @@ def draw_instructions():
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     waiting = False
+                elif event.key == pygame.K_f: # Fullscreen toggle
+                    is_fullscreen = not is_fullscreen
+                    if is_fullscreen:
+                        screen = pygame.display.set_mode((DESKTOP_WIDTH, DESKTOP_HEIGHT), pygame.FULLSCREEN)
+                    else:
+                        screen = pygame.display.set_mode((WIDTH, HEIGHT))
 
         # Animate offset
         offset = (offset + 0.35) % 40  # scrolling speed
@@ -181,50 +211,51 @@ def draw_instructions():
         draw_scrolling_grid(offset)
 
         # Text
-        screen.blit(title, ((WIDTH - title.get_width()) // 2, 80))
+        game_surface.blit(title, ((WIDTH - title.get_width()) // 2, 80))
         y_offset = 120
-        screen.blit(controls_title, ((WIDTH - controls_title.get_width()) // 2, y_offset + 60))
+        game_surface.blit(controls_title, ((WIDTH - controls_title.get_width()) // 2, y_offset + 60))
         y_offset += 100
 
         for line in controls:
             control_surface = font_text.render(line, True, WHITE)
-            screen.blit(control_surface, ((WIDTH - control_surface.get_width()) // 2, y_offset))
+            game_surface.blit(control_surface, ((WIDTH - control_surface.get_width()) // 2, y_offset))
             y_offset += 30
 
         
-        screen.blit(footer, ((WIDTH - footer.get_width()) // 2, HEIGHT - 40))
+        game_surface.blit(footer, ((WIDTH - footer.get_width()) // 2, HEIGHT - 40))
 
+        # --- Final Blit to the Display ---
+        screen.fill(BLACK)
+        game_rect = game_surface.get_rect(center=screen.get_rect().center)
+        screen.blit(game_surface, game_rect)
         pygame.display.flip()
-
 
         clock.tick(60)
 
 
 
 def draw_pause():
-    """Display Pause Menu"""
     font = MENU_FONT
     pause_text = font.render("Paused", True, NEON_PINK)
     subtitle = SUBTITLE_FONT.render("ENTER to Resume, ESC for Menu", True, NEON_BLUE)
-    screen.fill(BLACK)
-    screen.blit(pause_text, ((WIDTH - pause_text.get_width()) // 2, HEIGHT // 3))
-    screen.blit(subtitle, ((WIDTH - subtitle.get_width()) // 2, HEIGHT // 2))
-    pygame.display.flip()
+    subtitle2 = SUBTITLE_FONT.render("F for Fullscreen", True, NEON_BLUE)
+    game_surface.fill(BLACK)
+    game_surface.blit(pause_text, ((WIDTH - pause_text.get_width()) // 2, HEIGHT // 3))
+    game_surface.blit(subtitle, ((WIDTH - subtitle.get_width()) // 2, HEIGHT // 2))
+    game_surface.blit(subtitle2, ((WIDTH - subtitle2.get_width()) // 2, HEIGHT // 2 + 60))
 
 def draw_lose(score):
-    """Display Game Over Screen"""
     font = TITLE_FONT
     lose_text = font.render("GAME OVER", True, NEON_PINK)
     subtitle = SUBTITLE_FONT.render("ESC for Menu, ENTER to Restart", True, NEON_BLUE)
     score_text = MENU_FONT.render(f"Score: {score}", True, NEON_YELLOW)
-    screen.fill(BLACK)
-    screen.blit(lose_text, ((WIDTH - lose_text.get_width()) // 2, HEIGHT // 3))
-    screen.blit(score_text, ((WIDTH - score_text.get_width()) // 2, HEIGHT // 2))
-    screen.blit(subtitle, ((WIDTH - subtitle.get_width()) // 2, HEIGHT // 2 + 80))  
-    pygame.display.flip()
-
+    game_surface.fill(BLACK)
+    game_surface.blit(lose_text, ((WIDTH - lose_text.get_width()) // 2, HEIGHT // 3))
+    game_surface.blit(score_text, ((WIDTH - score_text.get_width()) // 2, HEIGHT // 2))
+    game_surface.blit(subtitle, ((WIDTH - subtitle.get_width()) // 2, HEIGHT // 2 + 80))
 
 # --- Maze Generation ---
+
 def make_maze(rows, cols):
     maze = [[1 for _ in range(cols)] for _ in range(rows)]
 
@@ -259,8 +290,8 @@ def add_loops(maze, extra_paths=8):
 
 # Glitch settings
 glitch_mode = False
-glitch_duration = 1.0    # seconds the glitch lasts
-glitch_timer = 0         # counts down when glitch is active
+glitch_duration = 1.0     # seconds the glitch lasts
+glitch_timer = 0          # counts down when glitch is active
 glitch_cooldown = 5.0    # seconds before next glitch
 cooldown_timer = 0       # counts down while waiting
 
@@ -310,7 +341,7 @@ class Player:
                 else:
                     break
 
-        # Correct invalid movement to prevent getting stuck in a wall
+        # correct invalid movement
         if self.glitch_used:
             self.move_to_nearest_empty_space()
 
@@ -349,8 +380,8 @@ class Player:
             self.rect.x, self.rect.y = self.last_valid_position
 
 
-    def draw(self):
-        screen.blit(self.image, self.rect.topleft)
+    def draw(self, surface):
+        surface.blit(self.image, self.rect.topleft)
 
 
 
@@ -396,8 +427,8 @@ class Enemy:
         return False
 
     
-    def draw(self, screen):
-        screen.blit(self.image, self.rect.topleft)
+    def draw(self, surface):
+        surface.blit(self.image, self.rect.topleft)
 
 # --- Goal & Maze Drawing ---
 def find_farthest_free_tile(maze, player_pos):
@@ -417,11 +448,11 @@ def draw_maze():
         for c in range(len(maze[r])):
             x, y = c*TILE, r*TILE + INFO_BAR_HEIGHT
             if maze[r][c] == 1:
-                pygame.draw.rect(screen, NEON_GREEN, (x, y, TILE, TILE), 3)
+                pygame.draw.rect(game_surface, NEON_GREEN, (x, y, TILE, TILE), 3)
             elif maze[r][c] == 9:
-                pygame.draw.rect(screen, (138, 43, 226), (x, y, TILE, TILE))
+                pygame.draw.rect(game_surface, (138, 43, 226), (x, y, TILE, TILE))
                 glow_size = int(3 + 2 * abs(math.sin(glow_timer)))
-                pygame.draw.rect(screen, (255,0,255), (x, y, TILE, TILE), glow_size)
+                pygame.draw.rect(game_surface, (255,0,255), (x, y, TILE, TILE), glow_size)
 
 def get_reachable_tiles(maze, start):
     rows, cols = len(maze), len(maze[0])
@@ -438,8 +469,8 @@ def get_reachable_tiles(maze, start):
                 visited.add((nr, nc))
                 queue.append((nr, nc))
     return visited
-
 # --- Add Power-ups Functions -----
+
 # In spawn_speed_boost function
 def spawn_speed_boost():
     free_tiles = list(get_reachable_tiles(maze, (1, 1)))
@@ -580,21 +611,31 @@ while running:
             pygame.mixer.music.stop()
             pygame.quit()
             sys.exit()
-        elif state == 'PLAYING' and event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-            state = 'PAUSED'
-        elif state == 'PAUSED' and event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
-            state = 'PLAYING'
-        elif state == 'PAUSED' and event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-            state = 'MENU'
-            draw_menu()
-            reset_maze(1)
-        elif state=="LOSE" and event.type==pygame.KEYDOWN:
-            if event.key == pygame.K_ESCAPE:
-                state = "MENU"
-            elif event.key == pygame.K_RETURN:
-                state = "PLAYING"
-                level, enemy_speed, score = 1, 2, 0
-                reset_maze(1)
+        elif event.type == pygame.KEYDOWN:
+             # Fullscreen toggle is always available
+            if event.key == pygame.K_f:
+                is_fullscreen = not is_fullscreen
+                if is_fullscreen:
+                    screen = pygame.display.set_mode((DESKTOP_WIDTH, DESKTOP_HEIGHT), pygame.FULLSCREEN)
+                else:
+                    screen = pygame.display.set_mode((WIDTH, HEIGHT))
+
+            if state == 'PLAYING':
+                if event.key == pygame.K_ESCAPE:
+                    state = 'PAUSED'
+            elif state == 'PAUSED':
+                if event.key == pygame.K_RETURN:
+                    state = 'PLAYING'
+                elif event.key == pygame.K_ESCAPE:
+                    state = 'MENU'
+            elif state == "LOSE":
+                if event.key == pygame.K_ESCAPE:
+                    state = "MENU"
+                elif event.key == pygame.K_RETURN:
+                    state = "PLAYING"
+                    level, enemy_speed, score = 1, 2, 0
+                    reset_maze(1)
+
 
     if state == "PLAYING":
         keys = pygame.key.get_pressed()
@@ -650,12 +691,12 @@ while running:
             if cooldown_timer > 0:
                 cooldown_timer -= dt
 
-        # --- Draw Game Elements --- 
-        screen.fill(BLACK)
+        # --- Draw Game Elements to the game_surface --- 
+        game_surface.fill(BLACK)
         # Draw info bar at the top
         font = HELP_FONT
         text = font.render(f"Level: {level}   Enemy Speed: {enemy_speed}   Score: {score}", True, NEON_BLUE)
-        screen.blit(text, (10, 5))
+        game_surface.blit(text, (10, 5))
 
         # Draw glitch cooldown bar
         bar_width, bar_height = 100, 10
@@ -666,18 +707,18 @@ while running:
         else:
             fill_width = bar_width
 
-        pygame.draw.rect(screen, (50, 50, 50), (bar_x, bar_y, bar_width, bar_height))  # background
-        pygame.draw.rect(screen, (255, 255, 0), (bar_x, bar_y, fill_width, bar_height))  # fill
+        pygame.draw.rect(game_surface, (50, 50, 50), (bar_x, bar_y, bar_width, bar_height))  # background
+        pygame.draw.rect(game_surface, (255, 255, 0), (bar_x, bar_y, fill_width, bar_height))  # fill
         if glitch_mode:
-            pygame.draw.rect(screen, (0, 255, 0), (bar_x, bar_y, bar_width, bar_height), 2)
+            pygame.draw.rect(game_surface, (0, 255, 0), (bar_x, bar_y, bar_width, bar_height), 2)
 
 
         draw_maze()
-        player.draw()
+        player.draw(game_surface)
         for enemy in enemies:
-            enemy.draw(screen)
+            enemy.draw(game_surface)
         for pu in powerups:    
-            pu.draw(screen)
+            pu.draw(game_surface)
 
     
     elif state == "PAUSED":
@@ -686,7 +727,14 @@ while running:
         draw_lose(final_score)
 
 
-
+    # --- Final Blit to the Display ---
+    # Clear the main window (especially important in fullscreen for the black bars)
+    screen.fill(BLACK)
+    # Calculate position to center the game_surface
+    game_rect = game_surface.get_rect(center = screen.get_rect().center)
+    # Blit the game surface onto the main screen at the calculated position
+    screen.blit(game_surface, game_rect)
+    
     pygame.display.flip()
     clock.tick(30)
     glow_timer += 0.1
