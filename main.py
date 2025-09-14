@@ -67,6 +67,15 @@ def draw_pause():
     screen.blit(subtitle, ((WIDTH - subtitle.get_width()) // 2, HEIGHT // 2))
     pygame.display.flip()
 
+def draw_lose():
+    font = pygame.font.SysFont(None, 74)
+    lose_text = font.render("GAME OVER", True, NEON_PINK)
+    subtitle = pygame.font.SysFont(None, 36).render("ESC for Menu, SPACE to Restart", True, NEON_BLUE)
+    screen.fill(BLACK)
+    screen.blit(lose_text, ((WIDTH - lose_text.get_width()) // 2, HEIGHT // 3))
+    screen.blit(subtitle, ((WIDTH - subtitle.get_width()) // 2, HEIGHT // 2))
+    pygame.display.flip()
+
 # --- Maze Generation ---
 
 def make_maze(rows, cols):
@@ -452,6 +461,7 @@ while running:
         for enemy in enemies:
             if player.rect.colliderect(enemy.rect):
                 enemies.clear()
+                state = "LOSE"
                 level = 1
                 enemy_speed = 2
                 score = 0
@@ -512,6 +522,8 @@ while running:
 
     elif state == "PAUSED":
         draw_pause()
+    elif state == "LOSE":
+        draw_lose()
     # Handle menu/escape logic using the same event list
     for event in events:
         if event.type == pygame.QUIT:
@@ -525,6 +537,14 @@ while running:
             state = 'MENU'
             draw_menu()
             reset_maze(1)
+        elif state=="LOSE" and event.type==pygame.KEYDOWN:
+    if event.key == pygame.K_ESCAPE:
+        state = "MENU"
+    elif event.key == pygame.K_SPACE:
+        state = "PLAYING"
+        level, enemy_speed, score = 1, 2, 0
+        reset_maze(1)
+
     pygame.display.flip()
     clock.tick(30)
     glow_timer += 0.1
