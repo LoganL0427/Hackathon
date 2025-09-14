@@ -136,22 +136,46 @@ class Player:
 class Enemy:
     def __init__(self, x, y, speed):
         self.rect = pygame.Rect(x, y, TILE, TILE)
-        self.speed = speed
+        self.speed = int(speed)
         self.direction = random.choice([(1,0),(-1,0),(0,1),(0,-1)])
 
     def update(self):
-        dx, dy = self.direction[0]*self.speed, self.direction[1]*self.speed
-        new_x = self.rect.x + dx
-        new_y = self.rect.y + dy
-        # Fix bottom boundary to account for info bar
-        if 0 <= new_x <= WIDTH - TILE and 0 <= new_y <= HEIGHT - TILE - INFO_BAR_HEIGHT:
-            if not self.collide(dx, dy):
-                self.rect.x = new_x
-                self.rect.y = new_y
+        dx, dy = self.direction[0], self.direction[1]  # just 1 step in a direction
+        moved = False
+
+        # Try moving one pixel at a time, up to self.speed
+        for _ in range(self.speed):
+            new_x = self.rect.x + dx
+            new_y = self.rect.y + dy
+
+            # Fix bottom boundary to account for info bar
+            if 0 <= new_x <= WIDTH - TILE and 0 <= new_y <= HEIGHT - TILE - INFO_BAR_HEIGHT:
+                if not self.collide(dx, dy):
+                    self.rect.x = new_x
+                    self.rect.y = new_y
+                    moved = True
+                else:
+                    break  # stop if collision
             else:
-                self.direction = random.choice([(1,0),(-1,0),(0,1),(0,-1)])
-        else:
+                break  # stop if out of bounds
+
+        # If enemy couldn’t move, pick a new direction
+        if not moved:
             self.direction = random.choice([(1,0),(-1,0),(0,1),(0,-1)])
+
+    # def update(self):
+    #     dx, dy = self.direction[0]*self.speed, self.direction[1]*self.speed
+    #     new_x = self.rect.x + dx
+    #     new_y = self.rect.y + dy
+    #     # Fix bottom boundary to account for info bar
+    #     if 0 <= new_x <= WIDTH - TILE and 0 <= new_y <= HEIGHT - TILE - INFO_BAR_HEIGHT:
+    #         if not self.collide(dx, dy):
+    #             self.rect.x = new_x
+    #             self.rect.y = new_y
+    #         else:
+    #             self.direction = random.choice([(1,0),(-1,0),(0,1),(0,-1)])
+    #     else:
+    #         self.direction = random.choice([(1,0),(-1,0),(0,1),(0,-1)])
 
     def collide(self, dx, dy):
         new_rect = self.rect.move(dx, dy)
@@ -209,20 +233,31 @@ def get_reachable_tiles(maze, start):
     return visited
 # --- Add Power-ups Functions -----
 
+# In spawn_speed_boost function
 def spawn_speed_boost():
-    # Collect all empty tiles in the maze
-    free_tiles = [(r, c) for r in range(len(maze)) for c in range(len(maze[0])) if maze[r][c] == 0]
-    
-    # Pick a random free tile
-    r, c = random.choice(free_tiles)
-    
-    # Return a new SpeedBoost object at that tile
-    return SpeedBoost(c * TILE, r * TILE, TILE)
+    free_tiles = list(get_reachable_tiles(maze, (1, 1)))
+    valid_tiles = [pos for pos in free_tiles if pos != (1, 1)]
 
+    if valid_tiles:
+        r, c = random.choice(valid_tiles)
+    else:
+        r, c = (1, 2)
+
+    # Add INFO_BAR_HEIGHT to the y-coordinate when spawning
+    return SpeedBoost(c * TILE, r * TILE + INFO_BAR_HEIGHT, TILE)
+
+# In spawn_enemy_slow function
 def spawn_enemy_slow():
-    free_tiles = [(r, c) for r in range(len(maze)) for c in range(len(maze[0])) if maze[r][c] == 0]
-    r, c = random.choice(free_tiles)
-    return EnemySlow(c * TILE, r * TILE, TILE)
+    free_tiles = list(get_reachable_tiles(maze, (1, 1)))
+    valid_tiles = [pos for pos in free_tiles if pos != (1, 1)]
+
+    if valid_tiles:
+        r, c = random.choice(valid_tiles)
+    else:
+        r, c = (1, 2)
+
+    # Add INFO_BAR_HEIGHT to the y-coordinate when spawning
+    return EnemySlow(c * TILE, r * TILE + INFO_BAR_HEIGHT, TILE)
 
 
 

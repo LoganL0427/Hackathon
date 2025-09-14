@@ -7,7 +7,7 @@ class EnemySlow:
         self.timer = 0
         self.active = False
         self.slow_factor = slow_factor
-        self.color = (0, 255, 255)
+        self.color = (0, 0, 129)
         self.original_speeds = []  # store speeds when applied
 
     def apply(self, player, enemies):
@@ -17,7 +17,7 @@ class EnemySlow:
         self.original_speeds = [enemy.speed for enemy in enemies]
         # Slow enemies
         for enemy in enemies:
-            enemy.speed *= self.slow_factor
+            enemy.speed = int(enemy.speed * self.slow_factor)
         # hide power-up
         self.rect.x = -100
         self.rect.y = -100
