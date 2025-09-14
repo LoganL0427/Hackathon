@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 
 import pygame, sys, random, math, collections, time
 from powerups.speed import SpeedBoost
@@ -7,7 +6,7 @@ from powerups.slow import EnemySlow
 
 # --- Setup ---
 pygame.init()
-pygame.mixer.init()  # Make sure mixer is initialized
+pygame.mixer.init()  
 WIDTH, HEIGHT = 800, 600
 TILE = 60
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
@@ -18,7 +17,7 @@ INFO_BAR_HEIGHT = 40
 
 # --- Load background music ---
 try:
-    pygame.mixer.music.load("images/background.mp3")  # adjust path as needed
+    pygame.mixer.music.load("media/background.mp3")  # adjust path as needed
     pygame.mixer.music.set_volume(0.3)  # optional: lower volume so it's not too loud
 except pygame.error as e:
     print(f"Could not load music: {e}")
@@ -27,13 +26,13 @@ except pygame.error as e:
 # --- Load Images ---
 # Load and scale power-up images once
 try:
-    speed_boost_image = pygame.image.load('images/lightning2.png').convert_alpha()
+    speed_boost_image = pygame.image.load('media/lightning2.png').convert_alpha()
     speed_boost_image = pygame.transform.scale(speed_boost_image, (TILE, TILE))
-    enemy_slow_image = pygame.image.load('images/snowflake3.png').convert_alpha()
+    enemy_slow_image = pygame.image.load('media/snowflake3.png').convert_alpha()
     enemy_slow_image = pygame.transform.scale(enemy_slow_image, (TILE, TILE))
-    enemy_image = pygame.image.load('images/drone.png').convert_alpha()
+    enemy_image = pygame.image.load('media/drone.png').convert_alpha()
     enemy_image = pygame.transform.scale(enemy_image, (TILE, TILE))
-    player_image = pygame.image.load('images/player.png').convert_alpha()
+    player_image = pygame.image.load('media/player.png').convert_alpha()
     player_image = pygame.transform.scale(player_image, (TILE, TILE))
 except pygame.error as e:
     print(f"Error loading image: {e}")
@@ -43,10 +42,10 @@ except pygame.error as e:
     player_image = None
 
 # --- Load Fonts ---
-TITLE_FONT = pygame.font.Font("images/PressStart2P-Regular.ttf", 60)
-SUBTITLE_FONT = pygame.font.Font("images/PressStart2P-Regular.ttf", 21)
-HELP_FONT = pygame.font.Font("images/PressStart2P-Regular.ttf", 18)
-MENU_FONT = pygame.font.Font("images/PressStart2P-Regular.ttf", 39)
+TITLE_FONT = pygame.font.Font("media/PressStart2P-Regular.ttf", 60)
+SUBTITLE_FONT = pygame.font.Font("media/PressStart2P-Regular.ttf", 21)
+HELP_FONT = pygame.font.Font("media/PressStart2P-Regular.ttf", 18)
+MENU_FONT = pygame.font.Font("media/PressStart2P-Regular.ttf", 39)
 
 
 # Colors
@@ -57,6 +56,7 @@ NEON_GREEN = (19, 235, 221)
 NEON_YELLOW = (255, 255, 0)
 WHITE = (255, 255, 255)
 
+# --- Draw Menus
 def draw_scrolling_grid(offset):
     """Draw a scrolling neon grid background."""
     grid_color = (0, 255, 200)  # teal-ish neon
@@ -99,6 +99,7 @@ def draw_blur_glow_text(text, font, color, glow_color, pos):
 
 
 def draw_menu():
+    """Display Title Screen"""
     font = TITLE_FONT
     subtitle_font = SUBTITLE_FONT
     help_font = HELP_FONT
@@ -135,9 +136,8 @@ def draw_menu():
         clock.tick(60)
 
 
-
-
 def draw_instructions():
+    """Display How to Play Menu"""
     screen.fill(BLACK)
     font_title = MENU_FONT
     font_text = HELP_FONT
@@ -202,6 +202,7 @@ def draw_instructions():
 
 
 def draw_pause():
+    """Display Pause Menu"""
     font = MENU_FONT
     pause_text = font.render("Paused", True, NEON_PINK)
     subtitle = SUBTITLE_FONT.render("ENTER to Resume, ESC for Menu", True, NEON_BLUE)
@@ -211,6 +212,7 @@ def draw_pause():
     pygame.display.flip()
 
 def draw_lose(score):
+    """Display Game Over Screen"""
     font = TITLE_FONT
     lose_text = font.render("GAME OVER", True, NEON_PINK)
     subtitle = SUBTITLE_FONT.render("ESC for Menu, ENTER to Restart", True, NEON_BLUE)
@@ -221,8 +223,8 @@ def draw_lose(score):
     screen.blit(subtitle, ((WIDTH - subtitle.get_width()) // 2, HEIGHT // 2 + 80))  
     pygame.display.flip()
 
-# --- Maze Generation ---
 
+# --- Maze Generation ---
 def make_maze(rows, cols):
     maze = [[1 for _ in range(cols)] for _ in range(rows)]
 
@@ -308,7 +310,7 @@ class Player:
                 else:
                     break
 
-        # correct invalid movement
+        # Correct invalid movement to prevent getting stuck in a wall
         if self.glitch_used:
             self.move_to_nearest_empty_space()
 
@@ -436,8 +438,8 @@ def get_reachable_tiles(maze, start):
                 visited.add((nr, nc))
                 queue.append((nr, nc))
     return visited
-# --- Add Power-ups Functions -----
 
+# --- Add Power-ups Functions -----
 # In spawn_speed_boost function
 def spawn_speed_boost():
     free_tiles = list(get_reachable_tiles(maze, (1, 1)))
