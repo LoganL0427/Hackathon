@@ -43,7 +43,7 @@ NEON_GREEN = (19, 235, 221)
 def draw_menu():
     font = pygame.font.SysFont(None, 74)
     title = font.render("Neon Hacker", True, NEON_BLUE)
-    subtitle = pygame.font.SysFont(None, 36).render("Press SPACE to Start", True, NEON_PINK)
+    subtitle = pygame.font.SysFont(None, 36).render("Press ENTER to Start", True, NEON_PINK)
     screen.fill(BLACK)
     screen.blit(title, ((WIDTH - title.get_width()) // 2, HEIGHT // 3))
     screen.blit(subtitle, ((WIDTH - subtitle.get_width()) // 2, HEIGHT // 2))
@@ -54,7 +54,7 @@ def draw_menu():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
                 waiting = False
         clock.tick(60)
 
@@ -70,7 +70,7 @@ def draw_pause():
 def draw_lose():
     font = pygame.font.SysFont(None, 74)
     lose_text = font.render("GAME OVER", True, NEON_PINK)
-    subtitle = pygame.font.SysFont(None, 36).render("ESC for Menu, SPACE to Restart", True, NEON_BLUE)
+    subtitle = pygame.font.SysFont(None, 36).render("ESC for Menu, ENTER to Restart", True, NEON_BLUE)
     screen.fill(BLACK)
     screen.blit(lose_text, ((WIDTH - lose_text.get_width()) // 2, HEIGHT // 3))
     screen.blit(subtitle, ((WIDTH - subtitle.get_width()) // 2, HEIGHT // 2))
@@ -121,7 +121,7 @@ cooldown_timer = 0       # counts down while waiting
 # --- Entities ---
 class Player:
     def __init__(self, x, y, image=None):
-        self.rect = pygame.Rect(x, y, TILE - 5, TILE - 5)
+        self.rect = pygame.Rect(x, y + INFO_BAR_HEIGHT, TILE - 5, TILE - 5)
         self.speed = 4
         self.color = NEON_BLUE
         self.image = image
@@ -135,11 +135,11 @@ class Player:
             step = 1 if dx > 0 else -1
             for _ in range(abs(dx)):
                 if not self.collide(step, 0):
-                    self.last_valid_position = (self.rect.x, self.rect.y)
                     self.rect.x += step
                     moved = True
                 elif glitch_mode and not self.glitch_used:
                     # Glitch through one tile horizontally
+                    self.last_valid_position = (self.rect.x, self.rect.y)
                     self.rect.x += step * 2 *TILE
                     self.glitch_used = True
                     moved = True
@@ -151,11 +151,11 @@ class Player:
             step = 1 if dy > 0 else -1
             for _ in range(abs(dy)):
                 if not self.collide(0, step):
-                    self.last_valid_position = (self.rect.x, self.rect.y)
                     self.rect.y += step
                     moved = True
                 elif glitch_mode and not self.glitch_used:
                     # Glitch through one tile vertically
+                    self.last_valid_position = (self.rect.x, self.rect.y)
                     self.rect.y += step * 2 * TILE
                     self.glitch_used = True
                     moved = True
@@ -163,16 +163,12 @@ class Player:
                 else:
                     break
 
-        return moved
+        # correct invalid movement
+        if self.glitch_used:
+            self.move_to_nearest_empty_space()
 
-    # def move(self, dx, dy):
-    #     new_x = self.rect.x + dx
-    #     new_y = self.rect.y + dy
-    #     # Fix bottom boundary to account for info bar
-    #     if 0 <= new_x <= WIDTH - TILE and 0 <= new_y <= HEIGHT - TILE - INFO_BAR_HEIGHT:
-    #         if not self.collide(dx, dy):
-    #             self.rect.x = new_x
-    #             self.rect.y = new_y
+        return moved
+    
 
     def collide(self, dx, dy):
         new_rect = self.rect.move(dx, dy)
@@ -183,21 +179,30 @@ class Player:
                     if new_rect.colliderect(wall_rect):
                         return True
         return False
-    
+        
     def move_to_nearest_empty_space(self):
-        """Ensure player is not stuck inside a wall."""
-        row, col = (self.rect.y - INFO_BAR_HEIGHT) // TILE, self.rect.x // TILE
-        if 0 <= row < len(maze) and 0 <= col < len(maze[0]):
-            if maze[row][col] == 1 and hasattr(self, "last_valid_position"):
-                self.rect.x, self.rect.y = self.last_valid_position
+        """Snap player back to last valid position if inside a wall tile."""
+        # Get all corners of the player's rect
+        corners = [
+            (self.rect.left,  self.rect.top),
+            (self.rect.right - 1, self.rect.top),
+            (self.rect.left,  self.rect.bottom - 1),
+            (self.rect.right - 1, self.rect.bottom - 1),
+        ]
+
+        stuck = False
+        for (px, py) in corners:
+            row = (py - INFO_BAR_HEIGHT) // TILE
+            col = px // TILE
+            if not (0 <= row < len(maze) and 0 <= col < len(maze[0])) or maze[row][col] == 1:
+                    stuck = True
+                    break
+
+        if stuck and hasattr(self, "last_valid_position"):
+            self.rect.x, self.rect.y = self.last_valid_position
 
 
     def draw(self):
-        # color = NEON_BLUE
-        # rect_draw = self.rect.copy()
-        # rect_draw.y += INFO_BAR_HEIGHT
-        # pygame.draw.rect(screen, color, rect_draw)
-        # pygame.draw.rect(screen, self.color, self.rect)
         screen.blit(self.image, self.rect.topleft)
 
 
@@ -233,20 +238,6 @@ class Enemy:
         if not moved:
             self.direction = random.choice([(1,0),(-1,0),(0,1),(0,-1)])
 
-    # def update(self):
-    #     dx, dy = self.direction[0]*self.speed, self.direction[1]*self.speed
-    #     new_x = self.rect.x + dx
-    #     new_y = self.rect.y + dy
-    #     # Fix bottom boundary to account for info bar
-    #     if 0 <= new_x <= WIDTH - TILE and 0 <= new_y <= HEIGHT - TILE - INFO_BAR_HEIGHT:
-    #         if not self.collide(dx, dy):
-    #             self.rect.x = new_x
-    #             self.rect.y = new_y
-    #         else:
-    #             self.direction = random.choice([(1,0),(-1,0),(0,1),(0,-1)])
-    #     else:
-    #         self.direction = random.choice([(1,0),(-1,0),(0,1),(0,-1)])
-
     def collide(self, dx, dy):
         new_rect = self.rect.move(dx, dy)
         for r in range(len(maze)):
@@ -257,11 +248,6 @@ class Enemy:
                         return True
         return False
 
-    # def draw(self):
-        # rect_draw = self.rect.copy()
-        # rect_draw.y += INFO_BAR_HEIGHT
-        # pygame.draw.rect(screen, NEON_PINK, rect_draw)
-        # pygame.draw.rect(screen, NEON_PINK, self.rect)
     
     def draw(self, screen):
         screen.blit(self.image, self.rect.topleft)
@@ -368,7 +354,6 @@ def reset_maze(num_enemies=1):
         # Set goal_rect position to match player coordinate system (*WITH* INFO_BAR_HEIGHT)
         goal_rect.x = goal_col * TILE
         goal_rect.y = goal_row * TILE + INFO_BAR_HEIGHT
-        print(f"Goal placed at maze[{goal_row}][{goal_col}], rect at ({goal_rect.x}, {goal_rect.y})")
     else:
         # Fallback - this should rarely happen
         goal_row, goal_col = 1, 2
@@ -376,7 +361,6 @@ def reset_maze(num_enemies=1):
             maze[goal_row][goal_col] = 9
         goal_rect.x = goal_col * TILE
         goal_rect.y = goal_row * TILE + INFO_BAR_HEIGHT
-        print(f"Fallback goal placed at maze[{goal_row}][{goal_col}], rect at ({goal_rect.x}, {goal_rect.y})")
 
     # Reset player position
     player.rect.x = TILE
@@ -414,7 +398,7 @@ def reset_maze(num_enemies=1):
 # --- Initialization ---
 rows, cols = (HEIGHT - INFO_BAR_HEIGHT)//TILE, WIDTH//TILE
 enemy_speed = 2
-player = Player(TILE, TILE + INFO_BAR_HEIGHT, image=player_image)
+player = Player(TILE, TILE, image=player_image)
 enemies = []
 goal_rect = pygame.Rect(0, 0, TILE, TILE)
 goal_row, goal_col = 0, 0
@@ -433,9 +417,32 @@ while running:
         reset_maze(1)
     dt = 1/30
     events = list(pygame.event.get())
+
+# ---- Check exit condition
+
+
+    # Handle menu/escape logic using the same event list
     for event in events:
         if event.type == pygame.QUIT:
             running = False
+            pygame.quit()
+            sys.exit()
+        elif state == 'PLAYING' and event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+            state = 'PAUSED'
+        elif state == 'PAUSED' and event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
+            state = 'PLAYING'
+        elif state == 'PAUSED' and event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+            state = 'MENU'
+            draw_menu()
+            reset_maze(1)
+        elif state=="LOSE" and event.type==pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                state = "MENU"
+            elif event.key == pygame.K_RETURN:
+                state = "PLAYING"
+                level, enemy_speed, score = 1, 2, 0
+                reset_maze(1)
+
     if state == "PLAYING":
         keys = pygame.key.get_pressed()
         if keys[pygame.K_LEFT] or keys[pygame.K_a]:
@@ -451,7 +458,6 @@ while running:
         
         # Check goal collision
         if player.rect.colliderect(goal_rect):
-            print(f"Goal reached! Player at ({player.rect.x}, {player.rect.y}), Goal at ({goal_rect.x}, {goal_rect.y})")
             level += 1
             enemy_speed += 1
             num_enemies = 1 + (level // 3)
@@ -489,8 +495,8 @@ while running:
         else:
             if cooldown_timer > 0:
                 cooldown_timer -= dt
-        # --- Draw Game Elements --- 
 
+        # --- Draw Game Elements --- 
         screen.fill(BLACK)
         # Draw info bar at the top
         font = pygame.font.SysFont(None, 30)
@@ -511,6 +517,7 @@ while running:
         if glitch_mode:
             pygame.draw.rect(screen, (0, 255, 0), (bar_x, bar_y, bar_width, bar_height), 2)
 
+
         draw_maze()
         player.draw()
         for enemy in enemies:
@@ -518,32 +525,13 @@ while running:
         for pu in powerups:    
             pu.draw(screen)
 
-
-
+    
     elif state == "PAUSED":
         draw_pause()
     elif state == "LOSE":
         draw_lose()
-    # Handle menu/escape logic using the same event list
-    for event in events:
-        if event.type == pygame.QUIT:
-            pygame.quit()
-            sys.exit()
-        elif state == 'PLAYING' and event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-            state = 'PAUSED'
-        elif state == 'PAUSED' and event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
-            state = 'PLAYING'
-        elif state == 'PAUSED' and event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-            state = 'MENU'
-            draw_menu()
-            reset_maze(1)
-        elif state=="LOSE" and event.type==pygame.KEYDOWN:
-    if event.key == pygame.K_ESCAPE:
-        state = "MENU"
-    elif event.key == pygame.K_SPACE:
-        state = "PLAYING"
-        level, enemy_speed, score = 1, 2, 0
-        reset_maze(1)
+
+
 
     pygame.display.flip()
     clock.tick(30)
