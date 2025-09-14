@@ -87,6 +87,7 @@ class Player:
     def __init__(self, x, y):
         self.rect = pygame.Rect(x, y, TILE, TILE)
         self.speed = 4
+        self.color = NEON_BLUE
 
     def move(self, dx, dy):
         step_x = 1 if dx > 0 else -1
@@ -123,19 +124,20 @@ class Player:
             for c in range(len(maze[r])):
                 if maze[r][c] == 1:
                     wall_rect = pygame.Rect(c*TILE, r*TILE + INFO_BAR_HEIGHT, TILE, TILE)
-                    if new_rect.move(0, INFO_BAR_HEIGHT).colliderect(wall_rect):
+                    if new_rect.colliderect(wall_rect):
                         return True
         return False
 
     def draw(self):
-        color = NEON_BLUE
-        rect_draw = self.rect.copy()
-        rect_draw.y += INFO_BAR_HEIGHT
-        pygame.draw.rect(screen, color, rect_draw)
+        # color = NEON_BLUE
+        # rect_draw = self.rect.copy()
+        # rect_draw.y += INFO_BAR_HEIGHT
+        # pygame.draw.rect(screen, color, rect_draw)
+        pygame.draw.rect(screen, self.color, self.rect)
 
 class Enemy:
     def __init__(self, x, y, speed):
-        self.rect = pygame.Rect(x, y, TILE, TILE)
+        self.rect = pygame.Rect(x, y + INFO_BAR_HEIGHT, TILE, TILE)
         self.speed = int(speed)
         self.direction = random.choice([(1,0),(-1,0),(0,1),(0,-1)])
 
@@ -183,14 +185,15 @@ class Enemy:
             for c in range(len(maze[r])):
                 if maze[r][c] == 1:
                     wall_rect = pygame.Rect(c*TILE, r*TILE + INFO_BAR_HEIGHT, TILE, TILE)
-                    if new_rect.move(0, INFO_BAR_HEIGHT).colliderect(wall_rect):
+                    if new_rect.colliderect(wall_rect):
                         return True
         return False
 
     def draw(self):
-        rect_draw = self.rect.copy()
-        rect_draw.y += INFO_BAR_HEIGHT
-        pygame.draw.rect(screen, NEON_PINK, rect_draw)
+        # rect_draw = self.rect.copy()
+        # rect_draw.y += INFO_BAR_HEIGHT
+        # pygame.draw.rect(screen, NEON_PINK, rect_draw)
+        pygame.draw.rect(screen, NEON_PINK, self.rect)
 
 # --- Goal & Maze Drawing ---
 def find_farthest_free_tile(maze, player_pos):
@@ -291,9 +294,9 @@ def reset_maze(num_enemies=1):
     if valid_tiles:
         goal_row, goal_col = random.choice(valid_tiles)
         maze[goal_row][goal_col] = 9
-        # Set goal_rect position to match player coordinate system (without INFO_BAR_HEIGHT)
+        # Set goal_rect position to match player coordinate system (*WITH* INFO_BAR_HEIGHT)
         goal_rect.x = goal_col * TILE
-        goal_rect.y = goal_row * TILE
+        goal_rect.y = goal_row * TILE + INFO_BAR_HEIGHT
         print(f"Goal placed at maze[{goal_row}][{goal_col}], rect at ({goal_rect.x}, {goal_rect.y})")
     else:
         # Fallback - this should rarely happen
@@ -301,12 +304,12 @@ def reset_maze(num_enemies=1):
         if maze[goal_row][goal_col] == 0:
             maze[goal_row][goal_col] = 9
         goal_rect.x = goal_col * TILE
-        goal_rect.y = goal_row * TILE
+        goal_rect.y = goal_row * TILE + INFO_BAR_HEIGHT
         print(f"Fallback goal placed at maze[{goal_row}][{goal_col}], rect at ({goal_rect.x}, {goal_rect.y})")
 
     # Reset player position
     player.rect.x = TILE
-    player.rect.y = TILE
+    player.rect.y = TILE + INFO_BAR_HEIGHT
 
     # Reset enemies
     enemies.clear()
@@ -340,7 +343,7 @@ def reset_maze(num_enemies=1):
 # --- Initialization ---
 rows, cols = (HEIGHT - INFO_BAR_HEIGHT)//TILE, WIDTH//TILE
 enemy_speed = 2
-player = Player(TILE, TILE)
+player = Player(TILE, TILE + INFO_BAR_HEIGHT)
 enemies = []
 goal_rect = pygame.Rect(0, 0, TILE, TILE)
 goal_row, goal_col = 0, 0
@@ -387,7 +390,6 @@ while running:
                 enemy_speed = 2
                 score = 0
                 reset_maze(1)
-                player = Player(TILE, TILE)
                 break
 
         # --- Power-Up Collision & Update ---
