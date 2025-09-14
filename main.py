@@ -143,8 +143,12 @@ def draw_menu():
         draw_scrolling_grid(offset)
 
         # Draw blurred glowing title
-        draw_blur_glow_text("GLITCH SCAPE", font, NEON_BLUE, NEON_BLUE,
-                            ((WIDTH - font.size("GLITCH SCAPE")[0]) // 2, HEIGHT // 3))
+        draw_blur_glow_text("GLITCH", font, NEON_BLUE, NEON_BLUE,
+                            ((WIDTH - font.size("GLITCH")[0]) // 2, HEIGHT // 4))
+        
+        
+        draw_blur_glow_text("SCAPE", font, NEON_BLUE, NEON_BLUE,
+                            ((WIDTH - font.size("SCAPE")[0]) // 2, HEIGHT // 4 + 60))
 
         # Draw subtitles
         game_surface.blit(subtitle, ((WIDTH - subtitle.get_width()) // 2, HEIGHT // 2))
