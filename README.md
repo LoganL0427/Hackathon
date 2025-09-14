@@ -1,6 +1,5 @@
 # GLITCH SCAPE
 
-About the Game
 Welcome to Glitch Scape! You are a rebel spy, braving the deepest levels of underground security and avoiding the evil drones as you go. If you're lucky, you may encounter lightning candy to give you a speed boost or snow powder to slow down the drones. You can also use your special power: the ability to glitch through walls! Find the purple exit portal in each maze to escape to the next level. But stay alert, because the deeper levels will have more and more enemies as you go...
 
 Controls
