@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import pygame, sys, random, math, collections
+import pygame, sys, random, math, collections, time
 from powerups.speed import SpeedBoost
 from powerups.slow import EnemySlow
 
@@ -34,46 +34,183 @@ except pygame.error as e:
     enemy_image = None
     player_image = None
 
+# --- Load Fonts ---
+TITLE_FONT = pygame.font.Font("images/PressStart2P-Regular.ttf", 60)
+SUBTITLE_FONT = pygame.font.Font("images/PressStart2P-Regular.ttf", 21)
+HELP_FONT = pygame.font.Font("images/PressStart2P-Regular.ttf", 18)
+MENU_FONT = pygame.font.Font("images/PressStart2P-Regular.ttf", 39)
+
+
 # Colors
 BLACK = (37, 10, 54)
 NEON_BLUE = (253, 245, 0)
 NEON_PINK = (254, 63, 179)
 NEON_GREEN = (19, 235, 221)
+NEON_YELLOW = (255, 255, 0)
+WHITE = (255, 255, 255)
+
+def draw_scrolling_grid(offset):
+    """Draw a scrolling neon grid background."""
+    grid_color = (0, 255, 200)  # teal-ish neon
+    spacing = 40  # grid spacing
+    # Dark background
+    screen.fill(BLACK)
+
+    # Vertical lines
+    for x in range(0, WIDTH, spacing):
+        pygame.draw.line(screen, grid_color, (x, 0), (x, HEIGHT), 1)
+
+    # Horizontal lines (scrolling)
+    for y in range(-spacing, HEIGHT, spacing):
+        pygame.draw.line(screen, grid_color, (0, y + offset), (WIDTH, y + offset), 1)
+
+    # Overlay to dim so text pops
+    overlay = pygame.Surface((WIDTH, HEIGHT))
+    overlay.set_alpha(150)  # adjust transparency: 0 clear → 255 opaque
+    overlay.fill(BLACK)
+    screen.blit(overlay, (0, 0))
+
+def draw_blur_glow_text(text, font, color, glow_color, pos):
+    """Draws text with a soft blurred neon glow."""
+    x, y = pos
+    t = time.time()
+    pulse_alpha = int(80 + 40 * math.sin(t * 1))  # 10-150 for glow intensity
+    
+    # Render the glow layers with increasing blur radius
+    for radius in range(1, 8, 2):  # 1,3,5,7
+        glow_surf = font.render(text, True, glow_color)
+        glow_surf.set_alpha(pulse_alpha // radius)  # further layers are fainter
+        # Draw at 8 directions around center
+        for dx in (-radius, 0, radius):
+            for dy in (-radius, 0, radius):
+                if dx != 0 or dy != 0:
+                    screen.blit(glow_surf, (x + dx, y + dy))
+    
+    # Draw main text on top
+    screen.blit(font.render(text, True, color), pos)
+
 
 def draw_menu():
-    font = pygame.font.SysFont(None, 74)
-    title = font.render("Neon Hacker", True, NEON_BLUE)
-    subtitle = pygame.font.SysFont(None, 36).render("Press ENTER to Start", True, NEON_PINK)
-    screen.fill(BLACK)
-    screen.blit(title, ((WIDTH - title.get_width()) // 2, HEIGHT // 3))
-    screen.blit(subtitle, ((WIDTH - subtitle.get_width()) // 2, HEIGHT // 2))
-    pygame.display.flip()
+    font = TITLE_FONT
+    subtitle_font = SUBTITLE_FONT
+    help_font = HELP_FONT
+    
+    offset = 0
+    subtitle = subtitle_font.render("Press ENTER to Start", True, NEON_PINK)
+    help_text = help_font.render("Press H for How to Play", True, WHITE)
+
     waiting = True
     while waiting:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
-                waiting = False
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_RETURN:
+                    waiting = False
+                elif event.key == pygame.K_h:
+                    draw_instructions()  # show how to play
+
+        # Animate scrolling background
+        offset = (offset + 0.35) % 40
+        draw_scrolling_grid(offset)
+
+        # Draw blurred glowing title
+        draw_blur_glow_text("NEON HACKER", font, NEON_BLUE, NEON_BLUE,
+                            ((WIDTH - font.size("NEON HACKER")[0]) // 2, HEIGHT // 3))
+
+        # Draw subtitles
+        screen.blit(subtitle, ((WIDTH - subtitle.get_width()) // 2, HEIGHT // 2))
+        screen.blit(help_text, ((WIDTH - help_text.get_width()) // 2, HEIGHT // 2 + 50))
+
+        pygame.display.flip()
         clock.tick(60)
 
+
+
+
+def draw_instructions():
+    screen.fill(BLACK)
+    font_title = MENU_FONT
+    font_text = HELP_FONT
+    font_controls = SUBTITLE_FONT
+    font_footer = HELP_FONT
+    offset = 0
+
+    # Title
+    title = font_title.render("How to Play", True, NEON_BLUE)
+ 
+    # Controls section
+    controls_title = font_controls.render("Controls", True, NEON_PINK)
+
+    controls = [
+        "Arrow keys / WASD to move",
+        "Avoid enemy drones",
+        "Reach the purple portal to win",
+        "Collect power-ups for boosts",
+        "Press SPACE to glitch through walls",
+        "Press ESC to return to Menu",
+    ]
+
+    # Footer
+    footer = font_footer.render("Press ESC to return to Menu", True, NEON_BLUE)
+
+    # Wait loop
+    waiting = True
+    while waiting:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    waiting = False
+
+        # Animate offset
+        offset = (offset + 0.35) % 40  # scrolling speed
+
+        # Background
+        draw_scrolling_grid(offset)
+
+        # Text
+        screen.blit(title, ((WIDTH - title.get_width()) // 2, 80))
+        y_offset = 120
+        screen.blit(controls_title, ((WIDTH - controls_title.get_width()) // 2, y_offset + 60))
+        y_offset += 100
+
+        for line in controls:
+            control_surface = font_text.render(line, True, WHITE)
+            screen.blit(control_surface, ((WIDTH - control_surface.get_width()) // 2, y_offset))
+            y_offset += 30
+
+        
+        screen.blit(footer, ((WIDTH - footer.get_width()) // 2, HEIGHT - 40))
+
+        pygame.display.flip()
+
+
+        clock.tick(60)
+
+
+
 def draw_pause():
-    font = pygame.font.SysFont(None, 74)
+    font = MENU_FONT
     pause_text = font.render("Paused", True, NEON_PINK)
-    subtitle = pygame.font.SysFont(None, 36).render("ENTER to Resume, ESC for Menu", True, NEON_BLUE)
+    subtitle = SUBTITLE_FONT.render("ENTER to Resume, ESC for Menu", True, NEON_BLUE)
     screen.fill(BLACK)
     screen.blit(pause_text, ((WIDTH - pause_text.get_width()) // 2, HEIGHT // 3))
     screen.blit(subtitle, ((WIDTH - subtitle.get_width()) // 2, HEIGHT // 2))
     pygame.display.flip()
 
-def draw_lose():
-    font = pygame.font.SysFont(None, 74)
+def draw_lose(score):
+    font = TITLE_FONT
     lose_text = font.render("GAME OVER", True, NEON_PINK)
-    subtitle = pygame.font.SysFont(None, 36).render("ESC for Menu, ENTER to Restart", True, NEON_BLUE)
+    subtitle = SUBTITLE_FONT.render("ESC for Menu, ENTER to Restart", True, NEON_BLUE)
+    score_text = MENU_FONT.render(f"Score: {score}", True, NEON_YELLOW)
     screen.fill(BLACK)
     screen.blit(lose_text, ((WIDTH - lose_text.get_width()) // 2, HEIGHT // 3))
-    screen.blit(subtitle, ((WIDTH - subtitle.get_width()) // 2, HEIGHT // 2))
+    screen.blit(score_text, ((WIDTH - score_text.get_width()) // 2, HEIGHT // 2))
+    screen.blit(subtitle, ((WIDTH - subtitle.get_width()) // 2, HEIGHT // 2 + 80))  
     pygame.display.flip()
 
 # --- Maze Generation ---
@@ -270,7 +407,7 @@ def draw_maze():
         for c in range(len(maze[r])):
             x, y = c*TILE, r*TILE + INFO_BAR_HEIGHT
             if maze[r][c] == 1:
-                pygame.draw.rect(screen, NEON_GREEN, (x, y, TILE, TILE), 2)
+                pygame.draw.rect(screen, NEON_GREEN, (x, y, TILE, TILE), 3)
             elif maze[r][c] == 9:
                 pygame.draw.rect(screen, (138, 43, 226), (x, y, TILE, TILE))
                 glow_size = int(3 + 2 * abs(math.sin(glow_timer)))
@@ -404,6 +541,7 @@ goal_rect = pygame.Rect(0, 0, TILE, TILE)
 goal_row, goal_col = 0, 0
 level = 1
 score = 0
+final_score = 0
 glow_timer = 0
 powerups = []
 reset_maze(1)
@@ -470,6 +608,7 @@ while running:
                 state = "LOSE"
                 level = 1
                 enemy_speed = 2
+                final_score = score
                 score = 0
                 reset_maze(1)
                 break
@@ -499,8 +638,8 @@ while running:
         # --- Draw Game Elements --- 
         screen.fill(BLACK)
         # Draw info bar at the top
-        font = pygame.font.SysFont(None, 30)
-        text = font.render(f"Level: {level} | Enemy Speed: {enemy_speed} | Score: {score}", True, NEON_BLUE)
+        font = HELP_FONT
+        text = font.render(f"Level: {level}   Enemy Speed: {enemy_speed}   Score: {score}", True, NEON_BLUE)
         screen.blit(text, (10, 5))
 
         # Draw glitch cooldown bar
@@ -529,7 +668,7 @@ while running:
     elif state == "PAUSED":
         draw_pause()
     elif state == "LOSE":
-        draw_lose()
+        draw_lose(final_score)
 
 
 
