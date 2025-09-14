@@ -1,12 +1,15 @@
 import pygame
 
 class SpeedBoost:
-    def __init__(self, x, y, tile_size, duration=300):
-        self.rect = pygame.Rect(x, y, tile_size, tile_size)
+    def __init__(self, x, y, tile_size, duration=200, image=None):
+        self.rect = pygame.Rect(x, y, tile_size + 5, tile_size + 5)
         self.duration = duration
         self.active = False
         self.timer = 0
-        self.color = (255, 255, 0)  # neon yellow
+        # self.image = pygame.image.load("../images/lightning_bolt.png").convert_alpha()
+        # self.image = pygame.transform.scale(self.image, (tile_size, tile_size))  # scale to tile size if needed
+        self.image = image
+        self.color = (19, 232, 83)  # neon green
 
     def apply(self, player, enemies):
         self.active = True
@@ -29,6 +32,11 @@ class SpeedBoost:
     def reset(self, player):
         player.speed = 4
 
+    # def draw(self, screen):
+    #     if not self.active:
+    #         pygame.draw.rect(screen, self.color, self.rect, border_radius=23)
+
     def draw(self, screen):
         if not self.active:
-            pygame.draw.rect(screen, self.color, self.rect)
+            screen.blit(self.image, self.rect.topleft)
+

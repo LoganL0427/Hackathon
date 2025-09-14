@@ -7,19 +7,38 @@ from powerups.slow import EnemySlow
 
 # --- Setup ---
 pygame.init()
-WIDTH, HEIGHT = 640, 480
-TILE = 40
+WIDTH, HEIGHT = 800, 600
+TILE = 60
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Neon Hacker")
 clock = pygame.time.Clock()
 state = "MENU"
 INFO_BAR_HEIGHT = 40
 
+
+# --- Load Images ---
+# Load and scale power-up images once
+try:
+    speed_boost_image = pygame.image.load('images/lightning2.png').convert_alpha()
+    speed_boost_image = pygame.transform.scale(speed_boost_image, (TILE, TILE))
+    enemy_slow_image = pygame.image.load('images/snowflake3.png').convert_alpha()
+    enemy_slow_image = pygame.transform.scale(enemy_slow_image, (TILE, TILE))
+    enemy_image = pygame.image.load('images/drone.png').convert_alpha()
+    enemy_image = pygame.transform.scale(enemy_image, (TILE, TILE))
+    player_image = pygame.image.load('images/player.png').convert_alpha()
+    player_image = pygame.transform.scale(player_image, (TILE, TILE))
+except pygame.error as e:
+    print(f"Error loading image: {e}")
+    speed_boost_image = None # or a default surface
+    enemy_slow_image = None
+    enemy_image = None
+    player_image = None
+
 # Colors
-BLACK = (10, 10, 10)
-NEON_BLUE = (0, 255, 255)
-NEON_PINK = (255, 0, 128)
-NEON_GREEN = (0, 255, 128)
+BLACK = (37, 10, 54)
+NEON_BLUE = (253, 245, 0)
+NEON_PINK = (254, 63, 179)
+NEON_GREEN = (19, 235, 221)
 
 def draw_menu():
     font = pygame.font.SysFont(None, 74)
@@ -84,10 +103,11 @@ def add_loops(maze, extra_paths=8):
 
 # --- Entities ---
 class Player:
-    def __init__(self, x, y):
-        self.rect = pygame.Rect(x, y, TILE, TILE)
+    def __init__(self, x, y, image=None):
+        self.rect = pygame.Rect(x, y, TILE - 5, TILE - 5)
         self.speed = 4
         self.color = NEON_BLUE
+        self.image = image
 
     def move(self, dx, dy):
         step_x = 1 if dx > 0 else -1
@@ -133,13 +153,17 @@ class Player:
         # rect_draw = self.rect.copy()
         # rect_draw.y += INFO_BAR_HEIGHT
         # pygame.draw.rect(screen, color, rect_draw)
-        pygame.draw.rect(screen, self.color, self.rect)
+        # pygame.draw.rect(screen, self.color, self.rect)
+        screen.blit(self.image, self.rect.topleft)
+
+
 
 class Enemy:
-    def __init__(self, x, y, speed):
+    def __init__(self, x, y, speed, image=None):
         self.rect = pygame.Rect(x, y + INFO_BAR_HEIGHT, TILE, TILE)
         self.speed = int(speed)
         self.direction = random.choice([(1,0),(-1,0),(0,1),(0,-1)])
+        self.image = image
 
     def update(self):
         dx, dy = self.direction[0], self.direction[1]  # just 1 step in a direction
@@ -189,11 +213,14 @@ class Enemy:
                         return True
         return False
 
-    def draw(self):
+    # def draw(self):
         # rect_draw = self.rect.copy()
         # rect_draw.y += INFO_BAR_HEIGHT
         # pygame.draw.rect(screen, NEON_PINK, rect_draw)
-        pygame.draw.rect(screen, NEON_PINK, self.rect)
+        # pygame.draw.rect(screen, NEON_PINK, self.rect)
+    
+    def draw(self, screen):
+        screen.blit(self.image, self.rect.topleft)
 
 # --- Goal & Maze Drawing ---
 def find_farthest_free_tile(maze, player_pos):
@@ -247,7 +274,7 @@ def spawn_speed_boost():
         r, c = (1, 2)
 
     # Add INFO_BAR_HEIGHT to the y-coordinate when spawning
-    return SpeedBoost(c * TILE, r * TILE + INFO_BAR_HEIGHT, TILE)
+    return SpeedBoost(c * TILE, r * TILE + INFO_BAR_HEIGHT, TILE, image=speed_boost_image)
 
 # In spawn_enemy_slow function
 def spawn_enemy_slow():
@@ -260,7 +287,7 @@ def spawn_enemy_slow():
         r, c = (1, 2)
 
     # Add INFO_BAR_HEIGHT to the y-coordinate when spawning
-    return EnemySlow(c * TILE, r * TILE + INFO_BAR_HEIGHT, TILE)
+    return EnemySlow(c * TILE, r * TILE + INFO_BAR_HEIGHT, TILE, image=enemy_slow_image)
 
 
 
@@ -324,7 +351,7 @@ def reset_maze(num_enemies=1):
             er, ec = 3, 3
             if maze[er][ec] != 0:
                 maze[er][ec] = 0  # Force it to be walkable
-        enemies.append(Enemy(ec*TILE, er*TILE, enemy_speed))  
+        enemies.append(Enemy(ec*TILE, er*TILE, enemy_speed, image=enemy_image))  
 
     # --- Power-Up Cleanup ---
     for pu in powerups:
@@ -343,7 +370,7 @@ def reset_maze(num_enemies=1):
 # --- Initialization ---
 rows, cols = (HEIGHT - INFO_BAR_HEIGHT)//TILE, WIDTH//TILE
 enemy_speed = 2
-player = Player(TILE, TILE + INFO_BAR_HEIGHT)
+player = Player(TILE, TILE + INFO_BAR_HEIGHT, image=player_image)
 enemies = []
 goal_rect = pygame.Rect(0, 0, TILE, TILE)
 goal_row, goal_col = 0, 0
@@ -367,10 +394,14 @@ while running:
             running = False
     if state == "PLAYING":
         keys = pygame.key.get_pressed()
-        if keys[pygame.K_LEFT]: player.move(-player.speed,0)
-        if keys[pygame.K_RIGHT]: player.move(player.speed,0)
-        if keys[pygame.K_UP]: player.move(0,-player.speed)
-        if keys[pygame.K_DOWN]: player.move(0,player.speed)
+        if keys[pygame.K_LEFT] or keys[pygame.K_a]:
+            player.move(-player.speed, 0)
+        if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
+            player.move(player.speed, 0)
+        if keys[pygame.K_UP] or keys[pygame.K_w]:
+            player.move(0, -player.speed)
+        if keys[pygame.K_DOWN] or keys[pygame.K_s]:
+            player.move(0, player.speed)
         for enemy in enemies:
             enemy.update()
         
@@ -407,7 +438,7 @@ while running:
         draw_maze()
         player.draw()
         for enemy in enemies:
-            enemy.draw()
+            enemy.draw(screen)
         for pu in powerups:    
             pu.draw(screen)
 

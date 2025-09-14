@@ -1,14 +1,15 @@
 import pygame
 
 class EnemySlow:
-    def __init__(self, x, y, tile_size, duration=300, slow_factor=0.5):
-        self.rect = pygame.Rect(x, y, tile_size, tile_size)
+    def __init__(self, x, y, tile_size, duration=200, slow_factor=0.5, image=None):
+        self.rect = pygame.Rect(x, y, tile_size - 2, tile_size - 2)
         self.duration = duration
         self.timer = 0
         self.active = False
         self.slow_factor = slow_factor
-        self.color = (2, 5, 90)
+        self.color = (61, 46, 232) # blue
         self.original_speeds = []  # store speeds when applied
+        self.image = image
 
     def apply(self, player, enemies):
         self.active = True
@@ -43,6 +44,11 @@ class EnemySlow:
         self.original_speeds = []
 
 
+    # def draw(self, screen):
+    #     if not self.active:
+    #         pygame.draw.rect(screen, self.color, self.rect, border_radius=22)
+
+    
     def draw(self, screen):
         if not self.active:
-            pygame.draw.rect(screen, self.color, self.rect)
+            screen.blit(self.image, self.rect.topleft)
